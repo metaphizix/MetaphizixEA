@@ -8,87 +8,317 @@
 
 #include "Config.mqh"
 #include "OrderBlockDetector.mqh"
+#include "../Advanced/ForexAnalyzer.mqh"
+#include "../Advanced/MLPredictor.mqh"
+#include "../Advanced/VolatilityAnalyzer.mqh"
+#include "../Advanced/CorrelationAnalyzer.mqh"
+#include "../Optimization/AdaptiveDecisionEngine.mqh"
+#include "../Optimization/DynamicStrategyManager.mqh"
+#include "../Optimization/RealtimeOptimizer.mqh"
 
 //+------------------------------------------------------------------+
-//| Signal types                                                     |
+//| Enhanced Signal types and enumerations                          |
 //+------------------------------------------------------------------+
 enum ENUM_SIGNAL_TYPE
 {
     SIGNAL_NONE = 0,
-    SIGNAL_BUY_ENTRY = 1,
-    SIGNAL_SELL_ENTRY = 2,
+    SIGNAL_BUY = 1,
+    SIGNAL_SELL = 2,
     SIGNAL_BUY_EXIT = 3,
-    SIGNAL_SELL_EXIT = 4
+    SIGNAL_SELL_EXIT = 4,
+    SIGNAL_HOLD = 5,
+    SIGNAL_REDUCE = 6,
+    SIGNAL_INCREASE = 7
+};
+
+enum ENUM_SIGNAL_SOURCE
+{
+    SIGNAL_SOURCE_ORDERBLOCK,    // Order block detection
+    SIGNAL_SOURCE_TECHNICAL,     // Technical analysis
+    SIGNAL_SOURCE_ML,            // Machine learning
+    SIGNAL_SOURCE_FUNDAMENTAL,   // Fundamental analysis
+    SIGNAL_SOURCE_SENTIMENT,     // Market sentiment
+    SIGNAL_SOURCE_NEWS,          // News analysis
+    SIGNAL_SOURCE_CORRELATION,   // Cross-asset correlation
+    SIGNAL_SOURCE_VOLATILITY,    // Volatility analysis
+    SIGNAL_SOURCE_ENSEMBLE       // Combined signals
+};
+
+enum ENUM_SIGNAL_QUALITY
+{
+    SIGNAL_QUALITY_POOR,         // Poor quality signal
+    SIGNAL_QUALITY_FAIR,         // Fair quality signal
+    SIGNAL_QUALITY_GOOD,         // Good quality signal
+    SIGNAL_QUALITY_EXCELLENT     // Excellent quality signal
+};
+
+enum ENUM_SIGNAL_URGENCY
+{
+    SIGNAL_URGENCY_LOW,          // Low urgency
+    SIGNAL_URGENCY_NORMAL,       // Normal urgency
+    SIGNAL_URGENCY_HIGH,         // High urgency
+    SIGNAL_URGENCY_CRITICAL      // Critical urgency
 };
 
 //+------------------------------------------------------------------+
-//| Signal structure                                                 |
+//| Enhanced Signal structures                                       |
 //+------------------------------------------------------------------+
 struct SSignal
 {
     string               symbol;
     ENUM_SIGNAL_TYPE     type;
+    ENUM_SIGNAL_SOURCE   source;
+    ENUM_SIGNAL_QUALITY  quality;
+    ENUM_SIGNAL_URGENCY  urgency;
     double               entry_price;
     double               stop_loss;
     double               take_profit;
     double               confidence;
+    double               strength;
+    double               probability;
     datetime             time;
+    datetime             expiry;
     string               reason;
+    string               analysis;
     bool                 is_processed;
+    bool                 is_valid;
+    double               risk_reward_ratio;
+    double               expected_profit;
+    int                  timeframe_alignment;
+    string               contributing_indicators[];
+};
+
+struct SSignalConfig
+{
+    double               minConfidence;
+    double               minStrength;
+    bool                 requireMultiTimeframeAlignment;
+    bool                 enableMLValidation;
+    bool                 enableCorrelationCheck;
+    bool                 enableVolatilityFilter;
+    bool                 enableNewsFilter;
+    int                  maxSignalsPerSymbol;
+    int                  signalExpiryMinutes;
+    bool                 enableEnsembleSignals;
+    double               ensembleWeights[];
+};
+
+struct SSignalStatistics
+{
+    int                  totalSignals;
+    int                  processedSignals;
+    int                  successfulSignals;
+    double               averageConfidence;
+    double               averageAccuracy;
+    double               winRate;
+    double               averageRiskReward;
+    datetime             lastUpdate;
+    double               qualityScore;
+};
+
+struct SMarketContext
+{
+    string               symbol;
+    ENUM_MARKET_CONDITION marketCondition;
+    double               volatility;
+    double               trend;
+    double               momentum;
+    bool                 newsImpact;
+    double               correlationRisk;
+    double               liquidityLevel;
+    bool                 optimalTiming;
 };
 
 //+------------------------------------------------------------------+
-//| Signal manager class                                             |
-//| Processes order block signals and generates entry/exit points    |
+//| Advanced Signal Manager class                                   |
+//| Processes multiple signal sources and generates high-quality signals |
 //+------------------------------------------------------------------+
 class CSignalManager
 {
 private:
-    SSignal           m_signals[];
+    // Core signal data
+    SSignal              m_signals[];
+    SSignal              m_signalHistory[];
+    SSignalConfig        m_config;
+    SSignalStatistics    m_statistics;
+    
+    // Component references
     COrderBlockDetector* m_orderBlockDetector;
+    CForexAnalyzer*      m_forexAnalyzer;
+    CMLPredictor*        m_mlPredictor;
+    CVolatilityAnalyzer* m_volatilityAnalyzer;
+    CCorrelationAnalyzer* m_correlationAnalyzer;
+    
+    // Dynamic decision-making components
+    CAdaptiveDecisionEngine* m_adaptiveEngine;
+    CDynamicStrategyManager* m_strategyManager;
+    CRealtimeOptimizer*  m_realtimeOptimizer;
+    
+    // Signal processing
+    SMarketContext       m_marketContext[];
+    datetime             m_lastSignalTime[];
+    double               m_signalWeights[];
+    
+    // Dynamic signal processing
+    bool                 m_isDynamicMode;
+    double               m_dynamicThresholds[10];
+    ENUM_DECISION_MODE   m_currentDecisionMode;
+    double               m_adaptiveConfidence;
+    
+    // Performance tracking
+    double               m_signalAccuracy[];
+    string               m_trackedSymbols[];
     
 public:
     //--- Constructor/Destructor
     CSignalManager();
     ~CSignalManager();
     
-    //--- Initialization
+    //--- Initialization and configuration
     bool Initialize();
-    void SetOrderBlockDetector(COrderBlockDetector* detector);
+    bool Initialize(const SSignalConfig &config);
+    void SetConfiguration(const SSignalConfig &config);
+    void SetComponentReferences(COrderBlockDetector* orderBlock, CForexAnalyzer* forex, 
+                               CMLPredictor* ml, CVolatilityAnalyzer* vol, CCorrelationAnalyzer* corr,
+                               CAdaptiveDecisionEngine* adaptive, CDynamicStrategyManager* strategy,
+                               CRealtimeOptimizer* optimizer);
     
-    //--- Main functions
-    bool ProcessSignal(string symbol);
-    bool GetLatestSignal(string symbol, SSignal &signal);
-    bool GetSignals(string symbol, SSignal &signals[]);
-    bool HasNewSignal(string symbol);
+    //--- Main signal processing
+    bool ProcessSignals(const string symbol);
+    bool ProcessAllSymbols();
+    bool GenerateEnsembleSignal(const string symbol);
+    void UpdateMarketContext(const string symbol);
     
-    //--- Signal processing
-    void ClearSignals(string symbol = "");
-    int GetSignalCount(string symbol = "");
+    //--- Signal generation from different sources
+    bool GenerateOrderBlockSignals(const string symbol);
+    bool GenerateTechnicalSignals(const string symbol);
+    bool GenerateMLSignals(const string symbol);
+    bool GenerateVolatilitySignals(const string symbol);
+    bool GenerateCorrelationSignals(const string symbol);
+    
+    //--- Dynamic signal generation
+    bool GenerateAdaptiveSignals(const string symbol);
+    bool GenerateStrategyBasedSignals(const string symbol);
+    bool GenerateOptimizedSignals(const string symbol);
+    SSignal GenerateDynamicEnsembleSignal(const string symbol);
+    bool ProcessSignalWithDynamicEngine(const string symbol);
+    
+    //--- Adaptive decision making
+    bool ShouldTradeBasedOnAdaptiveLogic(const string symbol, const SSignal &signal);
+    ENUM_ORDER_TYPE GetAdaptiveSignalDirection(const string symbol);
+    double CalculateAdaptiveConfidence(const string symbol, const SSignal &signal);
+    bool ValidateSignalWithDynamicFilters(const SSignal &signal, const string symbol);
+    
+    //--- Signal validation and filtering
+    bool ValidateSignal(const SSignal &signal);
+    bool PassesQualityFilter(const SSignal &signal);
+    bool PassesCorrelationFilter(const SSignal &signal);
+    bool PassesVolatilityFilter(const SSignal &signal);
+    bool PassesNewsFilter(const SSignal &signal);
+    bool PassesMultiTimeframeCheck(const SSignal &signal);
+    
+    //--- Signal combination and weighting
+    SSignal CombineSignals(const SSignal signals[]);
+    double CalculateEnsembleConfidence(const SSignal signals[]);
+    void OptimizeSignalWeights();
+    double CalculateSignalWeight(ENUM_SIGNAL_SOURCE source, const string symbol);
+    
+    //--- Signal retrieval and management
+    bool GetLatestSignal(const string symbol, SSignal &signal);
+    bool GetSignals(const string symbol, SSignal &signals[]);
+    bool GetHighQualitySignals(const string symbol, SSignal &signals[]);
+    bool HasNewSignal(const string symbol);
+    bool HasCriticalSignal(const string symbol);
+    
+    //--- Signal analysis and metrics
+    double CalculateSignalQuality(const SSignal &signal);
+    double CalculateSignalStrength(const SSignal &signal);
+    ENUM_SIGNAL_URGENCY DetermineSignalUrgency(const SSignal &signal);
+    double EstimateSignalAccuracy(const SSignal &signal);
+    
+    //--- Performance tracking and optimization
+    void UpdateSignalOutcome(const SSignal &signal, bool success, double actualPnL);
+    SSignalStatistics GetSignalStatistics(const string symbol = "");
+    double GetSignalAccuracy(ENUM_SIGNAL_SOURCE source, const string symbol = "");
+    void OptimizeSignalGeneration();
+    
+    //--- Signal lifecycle management
+    void ClearSignals(const string symbol = "");
+    void ExpireOldSignals();
+    void ArchiveProcessedSignals();
+    int GetSignalCount(const string symbol = "");
+    int GetActiveSignalCount(const string symbol = "");
+    
+    //--- Market context analysis
+    void AnalyzeMarketConditions(const string symbol);
+    bool IsOptimalSignalTiming(const string symbol);
+    double GetMarketNoise(const string symbol);
+    bool IsMarketTrendAligned(const SSignal &signal);
+    
+    //--- Signal conflict resolution
+    bool HasConflictingSignals(const string symbol);
+    SSignal ResolveSignalConflicts(const string symbol);
+    void PrioritizeSignals(SSignal &signals[]);
+    
+    //--- Advanced signal features
+    bool GenerateAdaptiveSignals(const string symbol);
+    bool GenerateRegimeAwareSignals(const string symbol);
+    bool GenerateRiskAdjustedSignals(const string symbol);
+    
+    //--- Integration with other systems
+    bool IntegrateWithRiskManagement(SSignal &signal, double maxRisk);
+    bool IntegrateWithPortfolioManager(SSignal &signal);
+    bool IntegrateWithExitStrategy(SSignal &signal);
+    
+    //--- Debugging and diagnostics
+    void LogSignalGeneration(const SSignal &signal);
+    void LogSignalValidation(const SSignal &signal, bool passed);
+    void LogSignalPerformance();
+    string ExplainSignal(const SSignal &signal);
     
 private:
-    //--- Signal generation methods
-    bool GenerateEntrySignal(string symbol, const SOrderBlock &orderBlock);
-    bool GenerateExitSignal(string symbol, const SOrderBlock &orderBlock);
-    double CalculateStopLoss(string symbol, const SOrderBlock &orderBlock, ENUM_SIGNAL_TYPE signalType);
-    double CalculateTakeProfit(string symbol, const SOrderBlock &orderBlock, ENUM_SIGNAL_TYPE signalType);
-    double CalculateSignalConfidence(string symbol, const SOrderBlock &orderBlock);
+    //--- Internal signal generation helpers
+    bool GenerateEntrySignal(const string symbol, const SOrderBlock &orderBlock);
+    bool GenerateExitSignal(const string symbol, const SOrderBlock &orderBlock);
+    SSignal CreateSignalFromOrderBlock(const string symbol, const SOrderBlock &orderBlock);
+    SSignal CreateSignalFromTechnical(const string symbol, const STechnicalSignal &techSignal);
+    SSignal CreateSignalFromML(const string symbol, const SMLPrediction &mlPrediction);
     
-    //--- Validation methods
-    bool ValidateSignal(const SSignal &signal);
-    bool IsSignalRelevant(string symbol, const SOrderBlock &orderBlock);
-    bool CheckEntryConditions(string symbol, const SOrderBlock &orderBlock);
-    bool CheckExitConditions(string symbol, const SOrderBlock &orderBlock);
+    //--- Signal calculation helpers
+    double CalculateStopLoss(const string symbol, const SSignal &signal);
+    double CalculateTakeProfit(const string symbol, const SSignal &signal);
+    double CalculateSignalConfidence(const string symbol, const SSignal &signal);
+    double CalculateRiskRewardRatio(const SSignal &signal);
     
-    //--- Helper functions
-    double GetCurrentPrice(string symbol, ENUM_SIGNAL_TYPE signalType);
-    double GetATR(string symbol, ENUM_TIMEFRAMES timeframe, int period = 14);
-    bool IsNearOrderBlock(string symbol, const SOrderBlock &orderBlock, double tolerance = 0.5);
+    //--- Validation helpers
+    bool IsSignalRelevant(const string symbol, const SSignal &signal);
+    bool CheckEntryConditions(const string symbol, const SSignal &signal);
+    bool CheckExitConditions(const string symbol, const SSignal &signal);
+    bool IsNearSignificantLevel(const string symbol, double price);
+    
+    //--- Market analysis helpers
+    double GetCurrentPrice(const string symbol, ENUM_SIGNAL_TYPE signalType);
+    double GetATR(const string symbol, ENUM_TIMEFRAMES timeframe, int period = 14);
+    bool IsHighImpactTime(const string symbol);
+    double GetMarketLiquidity(const string symbol);
     
     //--- Array management
     void AddSignal(const SSignal &signal);
-    void RemoveOldSignals(string symbol);
-    int FindLatestSignalIndex(string symbol);
+    void RemoveOldSignals(const string symbol);
+    void RemoveProcessedSignals(const string symbol);
+    int FindLatestSignalIndex(const string symbol);
+    int FindSignalIndex(const SSignal &signal);
+    
+    //--- Statistics and performance
+    void UpdateSignalStatistics(const SSignal &signal);
+    void UpdateAccuracyMetrics(ENUM_SIGNAL_SOURCE source, bool success);
+    void CalculateOverallQualityScore();
+    
+    //--- Configuration helpers
+    void InitializeDefaultConfig();
+    void ValidateConfiguration();
+    void ApplyConfigurationChanges();
+};
 };
 
 //+------------------------------------------------------------------+

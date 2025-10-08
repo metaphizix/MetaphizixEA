@@ -138,6 +138,9 @@ void CDisplayManager::UpdateDisplay(string symbol)
     //--- Clean up old objects for this symbol
     CleanupOldObjects(symbol, TimeCurrent() - (7 * 24 * 3600)); // 1 week old
     
+    //--- Create information panels if enabled
+    CreateInformationPanels();
+    
     //--- Get signals for this symbol from global signal manager
     extern CSignalManager* g_signalManager;
     if(g_signalManager == NULL)
@@ -193,10 +196,11 @@ void CDisplayManager::UpdateDisplay(string symbol)
                 if(orderBlocks[i].is_confirmed)
                 {
                     //--- Calculate end time for rectangle (current time or 24 hours from block time)
-                    datetime endTime = MathMax(TimeCurrent(), orderBlocks[i].time + (24 * 3600));
+                    datetime endTime = MathMax(TimeCurrent(), orderBlocks[i].formation_time + (24 * 3600));
                     
-                    CreateOrderBlockRectangle(symbol, orderBlocks[i].time, orderBlocks[i].high,
-                                            endTime, orderBlocks[i].low, orderBlocks[i].is_bullish);
+                    bool isBullish = (orderBlocks[i].type == OB_TYPE_BULLISH);
+                    CreateOrderBlockRectangle(symbol, orderBlocks[i].formation_time, orderBlocks[i].high,
+                                            endTime, orderBlocks[i].low, isBullish);
                 }
             }
         }
@@ -578,5 +582,235 @@ void CDisplayManager::UpdateTooltip(string name, string tooltip)
     if(ObjectFind(0, name) >= 0)
     {
         ObjectSetString(0, name, OBJPROP_TOOLTIP, tooltip);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Create comprehensive information panels                         |
+//+------------------------------------------------------------------+
+void CDisplayManager::CreateInformationPanels()
+{
+    extern bool InpShowInfoPanel;
+    extern bool InpShowRiskPanel;
+    extern bool InpShowPerformancePanel;
+    extern bool InpShowMarketConditions;
+    extern color InpPanelBackgroundColor;
+    extern color InpPanelTextColor;
+    
+    if(!InpShowInfoPanel && !InpShowRiskPanel && !InpShowPerformancePanel && !InpShowMarketConditions)
+        return;
+    
+    int panelY = 30;
+    int panelSpacing = 150;
+    
+    //--- EA Status Panel
+    if(InpShowInfoPanel)
+    {
+        CreateEAStatusPanel(panelY);
+        panelY += panelSpacing;
+    }
+    
+    //--- Risk Management Panel
+    if(InpShowRiskPanel)
+    {
+        CreateRiskManagementPanel(panelY);
+        panelY += panelSpacing;
+    }
+    
+    //--- Performance Panel
+    if(InpShowPerformancePanel)
+    {
+        CreatePerformancePanel(panelY);
+        panelY += panelSpacing;
+    }
+    
+    //--- Market Conditions Panel
+    if(InpShowMarketConditions)
+    {
+        CreateMarketConditionsPanel(panelY);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Create EA status panel                                          |
+//+------------------------------------------------------------------+
+void CDisplayManager::CreateEAStatusPanel(int yPosition)
+{
+    extern bool InpEnableAutoTrading;
+    extern int InpMaxConcurrentPairs;
+    extern double InpAccountRiskPercent;
+    extern color InpPanelBackgroundColor;
+    extern color InpPanelTextColor;
+    
+    string panelName = m_objectPrefix + "StatusPanel";
+    
+    //--- Create background rectangle
+    if(ObjectCreate(0, panelName + "_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0))
+    {
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_XDISTANCE, 10);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_YDISTANCE, yPosition);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_XSIZE, 300);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_YSIZE, 120);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_COLOR, InpPanelBackgroundColor);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_BORDER_COLOR, clrWhite);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_BACK, false);
+    }
+    
+    //--- Create title
+    if(ObjectCreate(0, panelName + "_Title", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Title", OBJPROP_TEXT, "📊 MetaphizixEA v3.00 Status");
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_YDISTANCE, yPosition + 10);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_COLOR, clrYellow);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_FONTSIZE, 10);
+        ObjectSetString(0, panelName + "_Title", OBJPROP_FONT, "Arial Bold");
+    }
+    
+    //--- Create status lines
+    string statusText = "Mode: " + (InpEnableAutoTrading ? "🔴 LIVE TRADING" : "🟢 ANALYSIS");
+    if(ObjectCreate(0, panelName + "_Mode", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Mode", OBJPROP_TEXT, statusText);
+        ObjectSetInteger(0, panelName + "_Mode", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Mode", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Mode", OBJPROP_YDISTANCE, yPosition + 30);
+        ObjectSetInteger(0, panelName + "_Mode", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Mode", OBJPROP_FONTSIZE, 8);
+    }
+    
+    string pairsText = "Max Pairs: " + IntegerToString(InpMaxConcurrentPairs);
+    if(ObjectCreate(0, panelName + "_Pairs", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Pairs", OBJPROP_TEXT, pairsText);
+        ObjectSetInteger(0, panelName + "_Pairs", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Pairs", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Pairs", OBJPROP_YDISTANCE, yPosition + 50);
+        ObjectSetInteger(0, panelName + "_Pairs", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Pairs", OBJPROP_FONTSIZE, 8);
+    }
+    
+    string riskText = "Risk/Trade: " + DoubleToString(InpAccountRiskPercent, 1) + "%";
+    if(ObjectCreate(0, panelName + "_Risk", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Risk", OBJPROP_TEXT, riskText);
+        ObjectSetInteger(0, panelName + "_Risk", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Risk", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Risk", OBJPROP_YDISTANCE, yPosition + 70);
+        ObjectSetInteger(0, panelName + "_Risk", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Risk", OBJPROP_FONTSIZE, 8);
+    }
+    
+    string timeText = "Time: " + TimeToString(TimeCurrent(), TIME_SECONDS);
+    if(ObjectCreate(0, panelName + "_Time", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Time", OBJPROP_TEXT, timeText);
+        ObjectSetInteger(0, panelName + "_Time", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Time", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Time", OBJPROP_YDISTANCE, yPosition + 90);
+        ObjectSetInteger(0, panelName + "_Time", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Time", OBJPROP_FONTSIZE, 8);
+    }
+}
+
+//+------------------------------------------------------------------+
+//| Create risk management panel                                    |
+//+------------------------------------------------------------------+
+void CDisplayManager::CreateRiskManagementPanel(int yPosition)
+{
+    extern color InpPanelBackgroundColor;
+    extern color InpPanelTextColor;
+    
+    string panelName = m_objectPrefix + "RiskPanel";
+    
+    //--- Create background rectangle
+    if(ObjectCreate(0, panelName + "_BG", OBJ_RECTANGLE_LABEL, 0, 0, 0))
+    {
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_XDISTANCE, 10);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_YDISTANCE, yPosition);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_XSIZE, 300);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_YSIZE, 120);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_COLOR, InpPanelBackgroundColor);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_BORDER_COLOR, clrWhite);
+        ObjectSetInteger(0, panelName + "_BG", OBJPROP_BACK, false);
+    }
+    
+    //--- Create title
+    if(ObjectCreate(0, panelName + "_Title", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Title", OBJPROP_TEXT, "🛡️ Risk Management");
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_YDISTANCE, yPosition + 10);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_COLOR, clrOrange);
+        ObjectSetInteger(0, panelName + "_Title", OBJPROP_FONTSIZE, 10);
+        ObjectSetString(0, panelName + "_Title", OBJPROP_FONT, "Arial Bold");
+    }
+    
+    //--- Get current position information
+    int openPositions = PositionsTotal();
+    double totalProfit = 0;
+    double usedMargin = AccountInfoDouble(ACCOUNT_MARGIN);
+    double freeMargin = AccountInfoDouble(ACCOUNT_FREEMARGIN);
+    
+    for(int i = 0; i < openPositions; i++)
+    {
+        totalProfit += PositionGetDouble(POSITION_PROFIT);
+    }
+    
+    //--- Display risk information
+    string positionsText = "Open Positions: " + IntegerToString(openPositions);
+    if(ObjectCreate(0, panelName + "_Positions", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Positions", OBJPROP_TEXT, positionsText);
+        ObjectSetInteger(0, panelName + "_Positions", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Positions", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Positions", OBJPROP_YDISTANCE, yPosition + 30);
+        ObjectSetInteger(0, panelName + "_Positions", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Positions", OBJPROP_FONTSIZE, 8);
+    }
+    
+    string profitText = "Total P&L: " + DoubleToString(totalProfit, 2);
+    color profitColor = totalProfit >= 0 ? clrLime : clrRed;
+    if(ObjectCreate(0, panelName + "_Profit", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Profit", OBJPROP_TEXT, profitText);
+        ObjectSetInteger(0, panelName + "_Profit", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Profit", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Profit", OBJPROP_YDISTANCE, yPosition + 50);
+        ObjectSetInteger(0, panelName + "_Profit", OBJPROP_COLOR, profitColor);
+        ObjectSetInteger(0, panelName + "_Profit", OBJPROP_FONTSIZE, 8);
+    }
+    
+    string marginText = "Free Margin: " + DoubleToString(freeMargin, 2);
+    if(ObjectCreate(0, panelName + "_Margin", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Margin", OBJPROP_TEXT, marginText);
+        ObjectSetInteger(0, panelName + "_Margin", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Margin", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Margin", OBJPROP_YDISTANCE, yPosition + 70);
+        ObjectSetInteger(0, panelName + "_Margin", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Margin", OBJPROP_FONTSIZE, 8);
+    }
+    
+    //--- Risk status
+    extern CRiskManagement* g_riskManager;
+    string riskStatus = "Risk Status: ";
+    if(g_riskManager != NULL && g_riskManager.CanOpenNewTrade(_Symbol))
+        riskStatus += "✅ OK";
+    else
+        riskStatus += "⚠️ LIMITED";
+        
+    if(ObjectCreate(0, panelName + "_Status", OBJ_LABEL, 0, 0, 0))
+    {
+        ObjectSetString(0, panelName + "_Status", OBJPROP_TEXT, riskStatus);
+        ObjectSetInteger(0, panelName + "_Status", OBJPROP_CORNER, CORNER_LEFT_UPPER);
+        ObjectSetInteger(0, panelName + "_Status", OBJPROP_XDISTANCE, 20);
+        ObjectSetInteger(0, panelName + "_Status", OBJPROP_YDISTANCE, yPosition + 90);
+        ObjectSetInteger(0, panelName + "_Status", OBJPROP_COLOR, InpPanelTextColor);
+        ObjectSetInteger(0, panelName + "_Status", OBJPROP_FONTSIZE, 8);
     }
 }

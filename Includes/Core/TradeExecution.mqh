@@ -8,54 +8,268 @@
 
 #include "Config.mqh"
 #include "RiskManagement.mqh"
-#include "SignalManager.mqh"
 
 //+------------------------------------------------------------------+
-//| Trade execution class                                            |
-//| Handles order placement and trade management                     |
+//| Trade execution enumerations                                    |
+//+------------------------------------------------------------------+
+enum ENUM_EXECUTION_TYPE
+{
+    EXECUTION_MARKET,       // Market execution
+    EXECUTION_PENDING,      // Pending order
+    EXECUTION_STOP,         // Stop order
+    EXECUTION_LIMIT,        // Limit order
+    EXECUTION_ICEBERG,      // Iceberg order
+    EXECUTION_TWAP,         // Time-weighted average price
+    EXECUTION_SMART         // Smart execution with slippage control
+};
+
+enum ENUM_ORDER_FILL
+{
+    FILL_OR_KILL,          // Fill or kill
+    FILL_IOC,              // Immediate or cancel
+    FILL_FOK,              // Fill or kill
+    FILL_PARTIAL,          // Allow partial fills
+    FILL_COMPLETE          // Complete fill only
+};
+
+enum ENUM_EXECUTION_STATUS
+{
+    EXEC_STATUS_PENDING,    // Order pending
+    EXEC_STATUS_FILLED,     // Order filled
+    EXEC_STATUS_PARTIAL,    // Partially filled
+    EXEC_STATUS_REJECTED,   // Order rejected
+    EXEC_STATUS_CANCELLED,  // Order cancelled
+    EXEC_STATUS_ERROR       // Execution error
+};
+
+//+------------------------------------------------------------------+
+//| Trade execution structures                                       |
+//+------------------------------------------------------------------+
+struct SExecutionConfig
+{
+    ENUM_EXECUTION_TYPE executionType;
+    ENUM_ORDER_FILL fillType;
+    double          maxSlippagePips;
+    double          maxSpreadPips;
+    int             maxRetries;
+    int             retryDelayMs;
+    bool            enablePartialFills;
+    bool            smartExecution;
+    double          minLiquidity;
+    bool            priceImprovementEnabled;
+};
+
+struct SOrderRequest
+{
+    string          symbol;
+    ENUM_ORDER_TYPE orderType;
+    double          volume;
+    double          price;
+    double          stopLoss;
+    double          takeProfit;
+    double          confidence;
+    string          comment;
+    datetime        expiration;
+    ENUM_EXECUTION_TYPE executionType;
+};
+
+struct SExecutionResult
+{
+    ulong           ticket;
+    ENUM_EXECUTION_STATUS status;
+    double          fillPrice;
+    double          fillVolume;
+    double          slippage;
+    double          spread;
+    string          errorMessage;
+    datetime        executionTime;
+    int             retriesUsed;
+};
+
+struct STradeMetrics
+{
+    int             totalTrades;
+    int             successfulTrades;
+    double          averageSlippage;
+    double          averageSpread;
+    double          averageFillTime;
+    double          rejectionRate;
+    datetime        lastUpdate;
+};
+
+//+------------------------------------------------------------------+
+//| Advanced Trade execution class                                  |
+//| Handles sophisticated order placement and execution management  |
 //+------------------------------------------------------------------+
 class CTradeExecution
 {
 private:
+    // Core components
     CRiskManagement*  m_riskManager;
+    SExecutionConfig  m_config;
+    STradeMetrics     m_metrics;
+    
+    // Execution tracking
+    SOrderRequest     m_pendingOrders[];
+    SExecutionResult  m_executionHistory[];
+    
+    // Configuration
     int               m_magicNumber;
     string            m_comment;
+    
+    // Smart execution
+    double            m_optimalSpread[];
+    string            m_optimalSpreadSymbols[];
+    datetime          m_lastSpreadUpdate;
+    
+    // Performance tracking
+    double            m_slippageHistory[];
+    double            m_spreadHistory[];
+    int               m_executionTimes[];
+    datetime          m_executionTimestamps[];
     
 public:
     //--- Constructor/Destructor
     CTradeExecution();
     ~CTradeExecution();
     
-    //--- Initialization
-    bool Initialize(int magicNumber = 12345, string comment = "MetaphizixEA");
+    //--- Initialization and configuration
+    bool Initialize(int magicNumber = 12345, const string comment = "MetaphizixEA");
+    bool Initialize(const SExecutionConfig &config);
     void SetRiskManager(CRiskManagement* riskManager);
+    void SetConfiguration(const SExecutionConfig &config);
+    SExecutionConfig GetConfiguration() const { return m_config; }
     
-    //--- Trade execution methods
-    bool ExecuteBuyTrade(string symbol, double entryPrice, double stopLoss, double takeProfit);
-    bool ExecuteSellTrade(string symbol, double entryPrice, double stopLoss, double takeProfit);
-    bool ExecuteSignal(const SSignal &signal);
+    //--- Advanced trade execution methods
+    SExecutionResult ExecuteBuyTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit, double confidence = 1.0);
+    SExecutionResult ExecuteSellTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit, double confidence = 1.0);
+    SExecutionResult ExecuteOrderRequest(const SOrderRequest &request);
+    SExecutionResult ExecuteSmartOrder(const SOrderRequest &request);
     
-    //--- Trade management
-    bool ModifyTrade(ulong ticket, double stopLoss, double takeProfit);
-    bool CloseTrade(ulong ticket, double volume = 0);
-    bool ClosePartialTrade(ulong ticket, double percentage);
+    //--- Order management
+    bool PlacePendingOrder(const SOrderRequest &request);
+    bool ModifyOrder(ulong ticket, double price, double stopLoss, double takeProfit);
+    bool CancelOrder(ulong ticket);
+    bool ClosePosition(ulong ticket, double volume = 0);
+    bool ClosePartialPosition(ulong ticket, double percentage);
     
-    //--- Trade monitoring
+    //--- Advanced execution strategies
+    SExecutionResult ExecuteIcebergOrder(const SOrderRequest &request, double sliceSize);
+    SExecutionResult ExecuteTWAPOrder(const SOrderRequest &request, int timeSlices);
+    SExecutionResult ExecuteWithSlippageControl(const SOrderRequest &request);
+    SExecutionResult ExecuteWithPriceImprovement(const SOrderRequest &request);
+    
+    //--- Execution monitoring and analytics
     void MonitorExecution();
+    void UpdateExecutionMetrics();
+    STradeMetrics GetExecutionMetrics() const { return m_metrics; }
+    double GetAverageSlippage(const string symbol = "");
+    double GetExecutionQuality(const string symbol = "");
+    
+    //--- Order validation and risk checks
+    bool ValidateOrderRequest(const SOrderRequest &request);
+    bool CheckMarketConditions(const string symbol);
+    bool CheckLiquidityRequirements(const string symbol, double volume);
+    bool IsOptimalExecutionTime(const string symbol);
+    
+    //--- Price and spread analysis
+    double GetOptimalEntryPrice(const string symbol, ENUM_ORDER_TYPE orderType);
+    double CalculateExpectedSlippage(const string symbol, double volume);
+    bool IsSpreadAcceptable(const string symbol);
+    double GetMarketImpact(const string symbol, double volume);
+    
+    //--- Execution timing optimization
+    bool ShouldDelayExecution(const string symbol);
+    datetime GetOptimalExecutionTime(const string symbol);
+    bool IsHighLiquidityPeriod(const string symbol);
+    
+    //--- Multi-order management
+    bool ExecuteBatchOrders(const SOrderRequest requests[]);
+    bool ManagePendingOrders();
+    void CancelAllPendingOrders(const string symbol = "");
+    int GetActiveOrderCount(const string symbol = "");
+    
+    //--- Performance tracking
+    void RecordExecutionResult(const SExecutionResult &result);
+    double CalculateExecutionScore(const SExecutionResult &result);
+    bool IsExecutionPerformanceDegrading();
+    void OptimizeExecutionParameters();
+    
+    //--- Utility methods
+    bool IsValidPrice(const string symbol, double price);
+    double NormalizePrice(const string symbol, double price);
+    double CalculateStopLossDistance(const string symbol, double entryPrice, double stopLoss);
     double CalculateRiskReward(ulong ticket);
     bool IsTradeOpen(ulong ticket);
     
-    //--- Utility methods
-    bool IsValidPrice(string symbol, double price);
-    double NormalizePrice(string symbol, double price);
-    double CalculateStopLossDistance(string symbol, double entryPrice, double stopLoss);
+    //--- Backward compatibility methods
+    bool ExecuteBuyTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit);
+    bool ExecuteSellTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit);
+    bool ModifyTrade(ulong ticket, double stopLoss, double takeProfit);
+    bool CloseTrade(ulong ticket, double volume = 0);
     
 private:
-    //--- Helper methods
-    bool SendBuyOrder(string symbol, double volume, double price, double sl, double tp);
-    bool SendSellOrder(string symbol, double volume, double price, double sl, double tp);
-    bool ValidateTradeParameters(string symbol, double volume, double price, double sl, double tp);
-    string GetTradeComment(string symbol, string action);
+    //--- Core execution methods
+    SExecutionResult ExecuteMarketOrder(const SOrderRequest &request);
+    SExecutionResult ExecutePendingOrderInternal(const SOrderRequest &request);
+    SExecutionResult ExecuteWithRetries(const SOrderRequest &request);
+    
+    //--- Order sending helpers
+    bool SendBuyOrder(const string symbol, double volume, double price, double sl, double tp, const string comment);
+    bool SendSellOrder(const string symbol, double volume, double price, double sl, double tp, const string comment);
+    bool SendPendingOrder(const SOrderRequest &request);
+    
+    //--- Validation and safety
+    bool ValidateTradeParameters(const string symbol, double volume, double price, double sl, double tp);
+    bool CheckAccountRequirements(const string symbol, double volume);
+    bool CheckMarginRequirements(const string symbol, double volume);
+    bool ValidateStopLevels(const string symbol, double price, double sl, double tp);
+    
+    //--- Price analysis and optimization
+    double GetBestBidPrice(const string symbol);
+    double GetBestAskPrice(const string symbol);
+    double CalculateOptimalPrice(const string symbol, ENUM_ORDER_TYPE orderType, double referencePrice);
+    bool WaitForPriceImprovement(const string symbol, double targetPrice, int maxWaitMs);
+    
+    //--- Slippage and spread management
+    double CalculateActualSlippage(double requestedPrice, double executedPrice);
+    void UpdateSlippageHistory(const string symbol, double slippage);
+    void UpdateSpreadHistory(const string symbol);
+    double GetAverageSpread(const string symbol, int period = 20);
+    
+    //--- Execution timing
+    bool IsMarketOpen(const string symbol);
+    bool IsHighImpactNewsTime();
+    bool IsOptimalLiquidityTime(const string symbol);
+    int CalculateOptimalDelay(const string symbol);
+    
+    //--- Order management helpers
+    void AddToPendingOrders(const SOrderRequest &request);
+    void RemoveFromPendingOrders(ulong ticket);
+    int FindPendingOrderIndex(ulong ticket);
+    void CleanupExpiredOrders();
+    
+    //--- Performance calculation
+    void UpdateExecutionTime(int executionTimeMs);
+    void UpdateSuccessRate(bool success);
+    double CalculateExecutionEfficiency();
+    
+    //--- Array management
+    void ResizeExecutionHistoryArray(int newSize);
+    void ResizePendingOrdersArray(int newSize);
+    void CleanupOldExecutionHistory();
+    
+    //--- Logging and diagnostics
+    void LogExecutionAttempt(const SOrderRequest &request);
+    void LogExecutionResult(const SExecutionResult &result);
+    void LogExecutionMetrics();
+    string GetTradeComment(const string symbol, const string action);
+    
+    //--- Error handling
+    ENUM_EXECUTION_STATUS HandleExecutionError(int errorCode);
+    bool ShouldRetryExecution(int errorCode, int currentRetry);
+    void HandlePartialFill(const SExecutionResult &result);
+};
 };
 
 //+------------------------------------------------------------------+

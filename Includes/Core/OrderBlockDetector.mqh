@@ -9,45 +9,321 @@
 #include "Config.mqh"
 
 //+------------------------------------------------------------------+
-//| Order block structure                                            |
+//| Enhanced Order block enumerations                               |
 //+------------------------------------------------------------------+
-struct SOrderBlock
+enum ENUM_ORDER_BLOCK_TYPE
 {
-    string            symbol;
-    datetime          time;
-    double            high;
-    double            low;
-    double            open;
-    double            close;
-    ENUM_TIMEFRAMES   timeframe;
-    bool              is_bullish;
-    bool              is_confirmed;
-    double            strength;
-    int               touch_count;
-    datetime          last_touch;
+    OB_TYPE_BULLISH,            // Bullish order block
+    OB_TYPE_BEARISH,            // Bearish order block
+    OB_TYPE_MITIGATION,         // Mitigation block
+    OB_TYPE_BREAKER,            // Breaker block
+    OB_TYPE_INSTITUTIONAL,      // Institutional order block
+    OB_TYPE_INEFFICIENCY,       // Fair value gap/inefficiency
+    OB_TYPE_LIQUIDITY_VOID      // Liquidity void
+};
+
+enum ENUM_ORDER_BLOCK_STRENGTH
+{
+    OB_STRENGTH_WEAK,           // Weak order block
+    OB_STRENGTH_MODERATE,       // Moderate order block
+    OB_STRENGTH_STRONG,         // Strong order block
+    OB_STRENGTH_VERY_STRONG     // Very strong order block
+};
+
+enum ENUM_ORDER_BLOCK_STATUS
+{
+    OB_STATUS_FRESH,            // Fresh/untested order block
+    OB_STATUS_TESTED,           // Tested but holding
+    OB_STATUS_WEAKENED,         // Weakened by multiple tests
+    OB_STATUS_BROKEN,           // Broken/invalidated
+    OB_STATUS_RESPECTED,        // Recently respected
+    OB_STATUS_EXPIRED           // Expired due to time
+};
+
+enum ENUM_PATTERN_TYPE
+{
+    PATTERN_ENGULFING,          // Engulfing pattern
+    PATTERN_HAMMER,             // Hammer/doji
+    PATTERN_SHOOTING_STAR,      // Shooting star
+    PATTERN_INSIDE_BAR,         // Inside bar
+    PATTERN_OUTSIDE_BAR,        // Outside bar
+    PATTERN_PIN_BAR,            // Pin bar
+    PATTERN_MARUBOZU,           // Marubozu
+    PATTERN_DOJI,               // Doji
+    PATTERN_NONE                // No specific pattern
 };
 
 //+------------------------------------------------------------------+
-//| Order block detector class                                       |
-//| Responsible for detecting and managing order blocks              |
+//| Enhanced Order block structures                                 |
+//+------------------------------------------------------------------+
+struct SOrderBlock
+{
+    string                  symbol;
+    datetime                formation_time;
+    datetime                last_update;
+    double                  high;
+    double                  low;
+    double                  open;
+    double                  close;
+    double                  pivot_high;
+    double                  pivot_low;
+    ENUM_TIMEFRAMES         timeframe;
+    ENUM_ORDER_BLOCK_TYPE   type;
+    ENUM_ORDER_BLOCK_STRENGTH strength;
+    ENUM_ORDER_BLOCK_STATUS status;
+    ENUM_PATTERN_TYPE       pattern;
+    bool                    is_confirmed;
+    bool                    is_mitigated;
+    double                  strength_score;
+    int                     touch_count;
+    int                     rejection_count;
+    datetime                last_touch;
+    datetime                last_rejection;
+    double                  volume;
+    double                  momentum;
+    double                  confluence_score;
+    int                     timeframe_alignment;
+    string                  confluence_factors[];
+    double                  probability;
+    double                  expected_move;
+};
+
+struct SOrderBlockConfig
+{
+    int                     lookback_period;
+    double                  min_block_size_pips;
+    int                     confirmation_candles;
+    bool                    multi_timeframe_analysis;
+    ENUM_TIMEFRAMES         primary_timeframe;
+    ENUM_TIMEFRAMES         secondary_timeframes[];
+    bool                    enable_volume_analysis;
+    bool                    enable_momentum_filter;
+    bool                    enable_confluence_scoring;
+    bool                    enable_pattern_recognition;
+    double                  min_strength_score;
+    double                  min_confluence_score;
+    int                     max_blocks_per_symbol;
+    bool                    filter_overlapping_blocks;
+    bool                    enable_ai_enhancement;
+};
+
+struct SOrderBlockStatistics
+{
+    int                     total_blocks_detected;
+    int                     successful_blocks;
+    int                     broken_blocks;
+    double                  success_rate;
+    double                  average_strength;
+    double                  average_hold_time;
+    int                     bullish_blocks;
+    int                     bearish_blocks;
+    datetime                last_update;
+    double                  detection_accuracy;
+};
+
+struct SMarketStructure
+{
+    string                  symbol;
+    double                  higher_highs[];
+    double                  higher_lows[];
+    double                  lower_highs[];
+    double                  lower_lows[];
+    datetime                structure_times[];
+    bool                    is_uptrend;
+    bool                    is_downtrend;
+    bool                    is_ranging;
+    double                  trend_strength;
+    datetime                last_structure_break;
+};
+
+//+------------------------------------------------------------------+
+//| Advanced Order Block Detector class                             |
+//| AI-enhanced order block detection and market structure analysis |
 //+------------------------------------------------------------------+
 class COrderBlockDetector
 {
 private:
-    SOrderBlock       m_orderBlocks[];
-    datetime          m_lastAnalysis[];
+    // Configuration and settings
+    SOrderBlockConfig       m_config;
+    SOrderBlockStatistics   m_statistics;
+    
+    // Order block data
+    SOrderBlock             m_orderBlocks[];
+    SOrderBlock             m_historicalBlocks[];
+    
+    // Market structure analysis
+    SMarketStructure        m_marketStructure[];
+    string                  m_trackedSymbols[];
+    
+    // Analysis state
+    datetime                m_lastAnalysis[];
+    datetime                m_lastUpdate[];
+    
+    // Pattern recognition
+    ENUM_PATTERN_TYPE       m_detectedPatterns[][];
+    double                  m_patternScores[][];
+    
+    // AI enhancement
+    bool                    m_aiEnabled;
+    double                  m_aiConfidenceScores[];
     
 public:
     //--- Constructor/Destructor
     COrderBlockDetector();
     ~COrderBlockDetector();
     
-    //--- Initialization
+    //--- Initialization and configuration
     bool Initialize();
+    bool Initialize(const SOrderBlockConfig &config);
+    void SetConfiguration(const SOrderBlockConfig &config);
+    SOrderBlockConfig GetConfiguration() const { return m_config; }
     
-    //--- Main functions
-    bool AnalyzePair(string symbol);
-    bool HasNewOrderBlock(string symbol);
+    //--- Main analysis methods
+    bool AnalyzePair(const string symbol);
+    bool AnalyzeAllPairs();
+    bool PerformMultiTimeframeAnalysis(const string symbol);
+    void UpdateMarketStructure(const string symbol);
+    
+    //--- Order block detection
+    bool DetectOrderBlocks(const string symbol, ENUM_TIMEFRAMES timeframe);
+    bool DetectBullishOrderBlocks(const string symbol, ENUM_TIMEFRAMES timeframe);
+    bool DetectBearishOrderBlocks(const string symbol, ENUM_TIMEFRAMES timeframe);
+    bool DetectMitigationBlocks(const string symbol);
+    bool DetectBreakerBlocks(const string symbol);
+    bool DetectInstitutionalBlocks(const string symbol);
+    
+    //--- Pattern recognition and analysis
+    ENUM_PATTERN_TYPE IdentifyCandlestickPattern(const string symbol, int index);
+    bool DetectEngulfingPattern(const string symbol, int index);
+    bool DetectPinBarPattern(const string symbol, int index);
+    bool DetectInsideBarPattern(const string symbol, int index);
+    bool DetectDoji(const string symbol, int index);
+    
+    //--- Order block validation and scoring
+    bool ValidateOrderBlock(SOrderBlock &orderBlock);
+    double CalculateOrderBlockStrength(const SOrderBlock &orderBlock);
+    double CalculateConfluenceScore(const SOrderBlock &orderBlock);
+    ENUM_ORDER_BLOCK_STRENGTH DetermineStrengthLevel(double strengthScore);
+    bool IsOrderBlockValid(const SOrderBlock &orderBlock);
+    
+    //--- Market structure analysis
+    bool IdentifyMarketStructure(const string symbol);
+    bool DetectTrendDirection(const string symbol);
+    bool DetectStructureBreak(const string symbol);
+    bool FindSwingHighsAndLows(const string symbol);
+    double CalculateTrendStrength(const string symbol);
+    
+    //--- Order block management
+    bool HasNewOrderBlock(const string symbol);
+    bool GetLatestOrderBlock(const string symbol, SOrderBlock &orderBlock);
+    bool GetOrderBlocks(const string symbol, SOrderBlock &orderBlocks[]);
+    bool GetValidOrderBlocks(const string symbol, SOrderBlock &orderBlocks[]);
+    void UpdateOrderBlockStatus(const string symbol);
+    
+    //--- Order block interaction tracking
+    bool CheckOrderBlockTouch(const string symbol, SOrderBlock &orderBlock);
+    bool CheckOrderBlockBreak(const string symbol, SOrderBlock &orderBlock);
+    bool CheckOrderBlockRejection(const string symbol, SOrderBlock &orderBlock);
+    void RecordOrderBlockInteraction(SOrderBlock &orderBlock, bool respected);
+    
+    //--- Advanced analysis features
+    bool PerformVolumeAnalysis(const string symbol, SOrderBlock &orderBlock);
+    bool PerformMomentumAnalysis(const string symbol, SOrderBlock &orderBlock);
+    bool AnalyzeTimeframeAlignment(const string symbol, SOrderBlock &orderBlock);
+    double CalculateExpectedMove(const SOrderBlock &orderBlock);
+    
+    //--- AI-enhanced detection
+    bool EnableAIEnhancement();
+    bool DisableAIEnhancement();
+    double GetAIConfidenceScore(const SOrderBlock &orderBlock);
+    bool ValidateWithAI(const SOrderBlock &orderBlock);
+    
+    //--- Filtering and optimization
+    void FilterOverlappingBlocks(const string symbol);
+    void RemoveWeakBlocks(const string symbol);
+    void RemoveExpiredBlocks(const string symbol);
+    void OptimizeBlockDetection();
+    
+    //--- Statistical analysis and performance
+    SOrderBlockStatistics GetStatistics() const { return m_statistics; }
+    double GetDetectionAccuracy() const { return m_statistics.detection_accuracy; }
+    double GetSuccessRate() const { return m_statistics.success_rate; }
+    void UpdateStatistics();
+    void ResetStatistics();
+    
+    //--- Integration and utilities
+    bool IntegrateWithMLPredictor(CMLPredictor* mlPredictor);
+    bool IntegrateWithVolatilityAnalyzer(CVolatilityAnalyzer* volAnalyzer);
+    double GetOrderBlockProbability(const SOrderBlock &orderBlock);
+    
+    //--- Configuration getters/setters
+    void SetLookbackPeriod(int period) { m_config.lookback_period = period; }
+    void SetMinBlockSize(double pips) { m_config.min_block_size_pips = pips; }
+    void SetConfirmationCandles(int candles) { m_config.confirmation_candles = candles; }
+    void EnableMultiTimeframeAnalysis(bool enable) { m_config.multi_timeframe_analysis = enable; }
+    void EnableVolumeAnalysis(bool enable) { m_config.enable_volume_analysis = enable; }
+    
+    //--- Getters
+    int GetLookbackPeriod() const { return m_config.lookback_period; }
+    double GetMinBlockSize() const { return m_config.min_block_size_pips; }
+    int GetOrderBlockCount(const string symbol);
+    int GetValidOrderBlockCount(const string symbol);
+    
+private:
+    //--- Internal detection algorithms
+    bool ScanForBullishBlocks(const string symbol, ENUM_TIMEFRAMES tf, int startBar, int endBar);
+    bool ScanForBearishBlocks(const string symbol, ENUM_TIMEFRAMES tf, int startBar, int endBar);
+    bool IdentifyKeyLevels(const string symbol, ENUM_TIMEFRAMES tf);
+    bool FindImbalances(const string symbol, ENUM_TIMEFRAMES tf);
+    
+    //--- Validation helpers
+    bool MeetsMinimumSize(const SOrderBlock &orderBlock);
+    bool HasSufficientVolume(const SOrderBlock &orderBlock);
+    bool PassesQualityFilter(const SOrderBlock &orderBlock);
+    bool IsWithinTimeframe(const SOrderBlock &orderBlock);
+    
+    //--- Calculation helpers
+    double CalculateBlockHeight(const SOrderBlock &orderBlock);
+    double CalculateVolumeRatio(const string symbol, int index);
+    double CalculateMomentumScore(const string symbol, int index);
+    double CalculateRelativePosition(const SOrderBlock &orderBlock, double currentPrice);
+    
+    //--- Pattern analysis helpers
+    bool IsBearishEngulfing(const string symbol, int index);
+    bool IsBullishEngulfing(const string symbol, int index);
+    bool IsHammer(const string symbol, int index);
+    bool IsShootingStar(const string symbol, int index);
+    double GetCandleBodyRatio(const string symbol, int index);
+    
+    //--- Market structure helpers
+    void IdentifySwingPoints(const string symbol);
+    bool IsSwingHigh(const string symbol, int index, int period = 5);
+    bool IsSwingLow(const string symbol, int index, int period = 5);
+    void UpdateTrendDirection(const string symbol);
+    
+    //--- Array management
+    void AddOrderBlock(const SOrderBlock &orderBlock);
+    void RemoveOrderBlock(int index);
+    int FindOrderBlockIndex(const string symbol, datetime time);
+    void CleanupOldBlocks();
+    void SortBlocksByStrength(SOrderBlock &blocks[]);
+    
+    //--- Symbol management
+    int FindSymbolIndex(const string symbol);
+    void AddSymbolToTracking(const string symbol);
+    void RemoveSymbolFromTracking(const string symbol);
+    
+    //--- Performance optimization
+    void UpdateAnalysisCache(const string symbol);
+    bool IsAnalysisRequired(const string symbol);
+    void OptimizeDetectionParameters();
+    
+    //--- Logging and diagnostics
+    void LogOrderBlockDetection(const SOrderBlock &orderBlock);
+    void LogMarketStructureUpdate(const string symbol);
+    void LogStatistics();
+    void LogPerformanceMetrics();
+};
     bool GetOrderBlocks(string symbol, SOrderBlock &blocks[]);
     bool GetLatestOrderBlock(string symbol, SOrderBlock &block);
     

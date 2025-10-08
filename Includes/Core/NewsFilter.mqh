@@ -9,40 +9,286 @@
 #include "Config.mqh"
 
 //+------------------------------------------------------------------+
-//| News impact levels                                               |
+//| Enhanced News impact levels and enumerations                    |
 //+------------------------------------------------------------------+
 enum ENUM_NEWS_IMPACT
 {
-    NEWS_IMPACT_LOW = 1,
-    NEWS_IMPACT_MEDIUM = 2,
-    NEWS_IMPACT_HIGH = 3
+    NEWS_IMPACT_NONE = 0,       // No impact
+    NEWS_IMPACT_LOW = 1,        // Low impact
+    NEWS_IMPACT_MEDIUM = 2,     // Medium impact
+    NEWS_IMPACT_HIGH = 3,       // High impact
+    NEWS_IMPACT_CRITICAL = 4    // Critical impact
+};
+
+enum ENUM_NEWS_TYPE
+{
+    NEWS_TYPE_MONETARY_POLICY,  // Central bank decisions
+    NEWS_TYPE_EMPLOYMENT,       // Employment data
+    NEWS_TYPE_INFLATION,        // Inflation reports
+    NEWS_TYPE_GDP,              // GDP data
+    NEWS_TYPE_TRADE_BALANCE,    // Trade balance
+    NEWS_TYPE_RETAIL_SALES,     // Retail sales
+    NEWS_TYPE_MANUFACTURING,    // Manufacturing data
+    NEWS_TYPE_HOUSING,          // Housing data
+    NEWS_TYPE_CONSUMER_CONFIDENCE, // Consumer sentiment
+    NEWS_TYPE_POLITICAL,        // Political events
+    NEWS_TYPE_GEOPOLITICAL,     // Geopolitical events
+    NEWS_TYPE_SPEECHES,         // Central bank speeches
+    NEWS_TYPE_OTHER             // Other news
+};
+
+enum ENUM_NEWS_SENTIMENT
+{
+    NEWS_SENTIMENT_VERY_BEARISH, // Very bearish for currency
+    NEWS_SENTIMENT_BEARISH,      // Bearish for currency
+    NEWS_SENTIMENT_NEUTRAL,      // Neutral impact
+    NEWS_SENTIMENT_BULLISH,      // Bullish for currency
+    NEWS_SENTIMENT_VERY_BULLISH  // Very bullish for currency
+};
+
+enum ENUM_NEWS_FREQUENCY
+{
+    NEWS_FREQ_DAILY,            // Daily news
+    NEWS_FREQ_WEEKLY,           // Weekly reports
+    NEWS_FREQ_MONTHLY,          // Monthly data
+    NEWS_FREQ_QUARTERLY,        // Quarterly reports
+    NEWS_FREQ_YEARLY,           // Annual data
+    NEWS_FREQ_IRREGULAR         // Irregular/ad-hoc events
 };
 
 //+------------------------------------------------------------------+
-//| News event structure                                             |
+//| Enhanced News structures                                         |
 //+------------------------------------------------------------------+
 struct SNewsEvent
 {
-    string            currency;
-    string            title;
-    datetime          time;
-    ENUM_NEWS_IMPACT  impact;
-    string            forecast;
-    string            previous;
-    bool              is_upcoming;
+    string            id;                   // Unique identifier
+    string            currency;             // Affected currency
+    string            country;              // Country code
+    string            title;                // News title
+    string            description;          // Detailed description
+    datetime          time;                 // Event time
+    ENUM_NEWS_IMPACT  impact;              // Expected impact level
+    ENUM_NEWS_TYPE    type;                 // Type of news
+    ENUM_NEWS_SENTIMENT sentiment;         // Market sentiment
+    ENUM_NEWS_FREQUENCY frequency;         // Frequency of release
+    string            forecast;             // Forecasted value
+    string            previous;             // Previous value
+    string            actual;               // Actual value (after release)
+    bool              is_upcoming;          // Is event upcoming
+    bool              is_released;          // Has been released
+    double            surprise_index;       // Surprise factor (actual vs forecast)
+    double            volatility_impact;    // Expected volatility impact
+    string            affected_pairs[];     // Currency pairs affected
+    int               priority;             // Event priority ranking
+};
+
+struct SNewsConfig
+{
+    int               impactThreshold;      // Minimum impact level to consider
+    int               bufferMinutesBefore;  // Minutes before news to stop trading
+    int               bufferMinutesAfter;   // Minutes after news to stop trading
+    bool              enableSentimentAnalysis; // Enable sentiment analysis
+    bool              enableSurpriseIndex;  // Enable surprise factor calculation
+    bool              enableVolatilityPrediction; // Predict volatility impact
+    bool              trackNewsHistory;     // Keep historical news data
+    string            newsSource;           // News data source
+    string            apiKey;               // API key for news service
+    bool              filterLowImpact;      // Filter out low impact news
+    bool              enableAdaptiveFilter; // Adaptive filtering based on market
+    double            volatilityThreshold;  // Volatility threshold for filtering
+};
+
+struct SNewsStatistics
+{
+    int               totalEvents;          // Total news events processed
+    int               highImpactEvents;     // High impact events
+    double            averageVolatilityImpact; // Average volatility after news
+    double            averageSurpriseIndex; // Average surprise factor
+    int               tradingPauses;        // Number of times trading was paused
+    datetime          lastUpdate;          // Last statistics update
+    double            filterAccuracy;       // Filter accuracy percentage
+};
+
+struct SMarketReaction
+{
+    string            newsId;               // Related news event ID
+    string            symbol;               // Affected symbol
+    double            priceBeforeNews;      // Price before news
+    double            priceAfterNews;       // Price after news
+    double            maxVolatility;        // Maximum volatility observed
+    double            volumeIncrease;       // Volume increase percentage
+    int               reactionTimeSeconds;  // Time to react to news
+    ENUM_NEWS_SENTIMENT actualSentiment;   // Actual market sentiment
+    bool              predictedCorrectly;   // Was impact predicted correctly
 };
 
 //+------------------------------------------------------------------+
-//| News filter class                                                |
-//| Filters trading based on economic news events                    |
+//| Advanced News Filter class                                      |
+//| Comprehensive news analysis and trading filter system           |
 //+------------------------------------------------------------------+
 class CNewsFilter
 {
 private:
-    int               m_impactThreshold;
-    int               m_bufferMinutes;
+    // Configuration
+    SNewsConfig       m_config;
+    SNewsStatistics   m_statistics;
+    
+    // News data
     SNewsEvent        m_newsEvents[];
+    SNewsEvent        m_upcomingEvents[];
+    SNewsEvent        m_historicalEvents[];
+    SMarketReaction   m_marketReactions[];
+    
+    // State tracking
     datetime          m_lastUpdate;
+    datetime          m_lastDataFetch;
+    bool              m_isFilterActive;
+    string            m_affectedCurrencies[];
+    
+    // News source integration
+    string            m_newsApiUrl;
+    bool              m_isConnectedToNewsSource;
+    
+    // Adaptive filtering
+    double            m_impactPredictionModel[];
+    double            m_volatilityPredictionModel[];
+    
+public:
+    //--- Constructor/Destructor
+    CNewsFilter();
+    ~CNewsFilter();
+    
+    //--- Initialization and configuration
+    bool Initialize(int impactThreshold = 3, int bufferMinutes = 30);
+    bool Initialize(const SNewsConfig &config);
+    void SetConfiguration(const SNewsConfig &config);
+    SNewsConfig GetConfiguration() const { return m_config; }
+    
+    //--- News data management
+    bool UpdateNewsData();
+    bool FetchNewsFromSource();
+    bool LoadNewsFromFile(const string filePath);
+    bool SaveNewsToFile(const string filePath);
+    void AddManualNewsEvent(const SNewsEvent &newsEvent);
+    
+    //--- Main filtering methods
+    bool ShouldAvoidTrading(const string symbol);
+    bool ShouldAvoidTrading(const string symbol, datetime checkTime);
+    bool IsNewsImpactPeriod(const string symbol);
+    bool IsHighImpactNewsExpected(const string symbol, int minutesAhead = 60);
+    
+    //--- News analysis and prediction
+    ENUM_NEWS_IMPACT PredictNewsImpact(const SNewsEvent &newsEvent);
+    double CalculateSurpriseIndex(const SNewsEvent &newsEvent);
+    double PredictVolatilityImpact(const SNewsEvent &newsEvent);
+    ENUM_NEWS_SENTIMENT AnalyzeNewsSentiment(const SNewsEvent &newsEvent);
+    
+    //--- Currency and pair impact analysis
+    bool IsCurrencyAffected(const string currency);
+    bool IsPairAffected(const string symbol);
+    double GetCurrencyNewsRisk(const string currency);
+    double GetPairNewsRisk(const string symbol);
+    string GetAffectedCurrencies(string &currencies[]);
+    
+    //--- News event retrieval
+    bool GetUpcomingNews(SNewsEvent &events[], int hoursAhead = 24);
+    bool GetHighImpactNews(SNewsEvent &events[], int hoursAhead = 12);
+    bool GetNewsForCurrency(const string currency, SNewsEvent &events[]);
+    bool GetNewsForTimeRange(datetime startTime, datetime endTime, SNewsEvent &events[]);
+    SNewsEvent GetNextHighImpactNews(const string currency);
+    
+    //--- Market reaction tracking
+    void RecordMarketReaction(const string newsId, const string symbol);
+    bool AnalyzeMarketReaction(const SNewsEvent &newsEvent, const string symbol);
+    double GetAverageMarketReaction(ENUM_NEWS_TYPE newsType, const string currency);
+    void UpdateReactionStatistics();
+    
+    //--- Adaptive filtering and learning
+    void UpdateImpactPredictionModel();
+    void OptimizeFilterParameters();
+    bool IsAdaptiveFilteringEnabled() const { return m_config.enableAdaptiveFilter; }
+    void CalibrateFilterBasedOnHistory();
+    
+    //--- News timing and scheduling
+    datetime GetNextNewsTime(const string currency);
+    int GetMinutesToNextNews(const string currency);
+    bool IsNewsCluster(datetime checkTime, int windowMinutes = 60);
+    bool IsOptimalTradingTime(const string symbol);
+    
+    //--- Volatility and risk assessment
+    double EstimatePostNewsVolatility(const SNewsEvent &newsEvent, const string symbol);
+    bool IsVolatilityExpected(const string symbol, int minutesAhead = 30);
+    double GetNewsVolatilityMultiplier(const string symbol);
+    
+    //--- News sentiment and bias
+    bool IsNewsBullishForCurrency(const string currency);
+    bool IsNewsBearishForCurrency(const string currency);
+    double GetNewsSentimentScore(const string currency);
+    ENUM_NEWS_SENTIMENT GetOverallMarketSentiment();
+    
+    //--- Performance and statistics
+    SNewsStatistics GetNewsStatistics() const { return m_statistics; }
+    double GetFilterAccuracy() const { return m_statistics.filterAccuracy; }
+    void ResetStatistics();
+    void UpdatePerformanceMetrics();
+    
+    //--- Integration with other systems
+    bool IntegrateWithVolatilityAnalyzer(CVolatilityAnalyzer* volAnalyzer);
+    bool IntegrateWithRiskManager(CRiskManagement* riskManager);
+    bool ValidateWithMarketConditions(const string symbol);
+    
+    //--- Configuration and settings
+    void SetImpactThreshold(int threshold) { m_config.impactThreshold = threshold; }
+    void SetBufferMinutes(int beforeMinutes, int afterMinutes);
+    void EnableSentimentAnalysis(bool enable) { m_config.enableSentimentAnalysis = enable; }
+    void EnableAdaptiveFiltering(bool enable) { m_config.enableAdaptiveFilter = enable; }
+    
+    //--- Getters
+    int GetImpactThreshold() const { return m_config.impactThreshold; }
+    int GetBufferMinutes() const { return m_config.bufferMinutesBefore; }
+    bool IsNewsFilterActive() const { return m_isFilterActive; }
+    int GetUpcomingEventsCount() const { return ArraySize(m_upcomingEvents); }
+    
+private:
+    //--- Internal news processing
+    void ProcessNewsEvent(SNewsEvent &newsEvent);
+    void CalculateEventPriority(SNewsEvent &newsEvent);
+    void DetermineAffectedPairs(SNewsEvent &newsEvent);
+    void UpdateEventSentiment(SNewsEvent &newsEvent);
+    
+    //--- Data parsing and validation
+    bool ParseNewsData(const string jsonData, SNewsEvent &events[]);
+    bool ValidateNewsEvent(const SNewsEvent &newsEvent);
+    void CleanupOldEvents();
+    void SortEventsByTime(SNewsEvent &events[]);
+    
+    //--- Impact calculation helpers
+    double CalculateBaseImpact(const SNewsEvent &newsEvent);
+    double CalculateTimeDecayFactor(datetime newsTime, datetime currentTime);
+    double CalculateCurrencyWeightFactor(const string currency, const string symbol);
+    
+    //--- Market analysis helpers
+    bool IsMarketHours(const string symbol);
+    double GetHistoricalVolatilityIncrease(ENUM_NEWS_TYPE newsType);
+    bool IsConsensusBreaking(const SNewsEvent &newsEvent);
+    
+    //--- Array management
+    void AddNewsEvent(const SNewsEvent &newsEvent);
+    void RemoveExpiredEvents();
+    void UpdateUpcomingEvents();
+    int FindNewsEventIndex(const string newsId);
+    
+    //--- Statistical analysis
+    void CalculateCorrelationWithMarketMoves();
+    void UpdateFilterEffectiveness();
+    double CalculatePredictionAccuracy();
+    
+    //--- Logging and diagnostics
+    void LogNewsEvent(const SNewsEvent &newsEvent);
+    void LogFilterDecision(const string symbol, bool shouldAvoid, const string reason);
+    void LogMarketReaction(const SMarketReaction &reaction);
+    void LogStatistics();
+};
     
 public:
     //--- Constructor/Destructor

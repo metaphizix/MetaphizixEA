@@ -9,6 +9,22 @@
 #property strict
 
 //+------------------------------------------------------------------+
+//| Multi-TF Signal Structure                                       |
+//+------------------------------------------------------------------+
+struct MTFSignal
+{
+    ENUM_ORDER_TYPE direction;
+    double confidence;
+    string reasoning;
+    int timeframesAligned;
+    int totalTimeframes;
+    double entryPrice;
+    double stopLoss;
+    double takeProfit;
+    bool isValid;
+};
+
+//+------------------------------------------------------------------+
 //| Multi-Timeframe Analysis Class                                 |
 //+------------------------------------------------------------------+
 class CMultiTimeframeAnalyzer
@@ -34,20 +50,7 @@ private:
     TimeframeData m_timeframes[9]; // M1, M5, M15, M30, H1, H4, D1, W1, MN1
     int m_timeframeCount;
     
-    //--- Multi-TF signals
-    struct MTFSignal
-    {
-        ENUM_ORDER_TYPE direction;
-        double confidence;
-        string reasoning;
-        int timeframesAligned;
-        int totalTimeframes;
-        double entryPrice;
-        double stopLoss;
-        double takeProfit;
-        bool isValid;
-    };
-    
+    //--- Multi-TF signal instance
     MTFSignal m_signal;
     
     //--- Confluence analysis
@@ -325,7 +328,15 @@ bool CMultiTimeframeAnalyzer::AnalyzeTimeframe(string symbol, ENUM_TIMEFRAMES ti
     m_timeframes[tfIndex].volatility = GetTimeframeVolatility(symbol, timeframe);
     
     //--- Calculate trend strength using ADX
-    double adx = iADX(symbol, timeframe, 14, PRICE_CLOSE, MODE_MAIN, 0);
+    int adxHandle = iADX(symbol, timeframe, 14);
+    double adx = 50.0; // Default value
+    if(adxHandle != INVALID_HANDLE)
+    {
+        double adxBuffer[];
+        ArraySetAsSeries(adxBuffer, true);
+        if(CopyBuffer(adxHandle, 0, 0, 1, adxBuffer) > 0)
+            adx = adxBuffer[0];
+    }
     m_timeframes[tfIndex].trendStrength = adx;
     
     //--- Determine trend bias
@@ -367,10 +378,40 @@ bool CMultiTimeframeAnalyzer::AnalyzeTimeframe(string symbol, ENUM_TIMEFRAMES ti
 string CMultiTimeframeAnalyzer::GetTimeframeTrend(string symbol, ENUM_TIMEFRAMES timeframe)
 {
     //--- Use multiple indicators for trend determination
-    double sma20 = iMA(symbol, timeframe, 20, 0, MODE_SMA, PRICE_CLOSE, 0);
-    double sma50 = iMA(symbol, timeframe, 50, 0, MODE_SMA, PRICE_CLOSE, 0);
-    double ema20 = iMA(symbol, timeframe, 20, 0, MODE_EMA, PRICE_CLOSE, 0);
-    double currentPrice = iClose(symbol, timeframe, 0);
+    // Get SMA20
+    int sma20Handle = iMA(symbol, timeframe, 20, 0, MODE_SMA);
+    double sma20 = 0.0;
+    if(sma20Handle != INVALID_HANDLE)
+    {
+        double sma20Buffer[];
+        ArraySetAsSeries(sma20Buffer, true);
+        if(CopyBuffer(sma20Handle, 0, 0, 1, sma20Buffer) > 0)
+            sma20 = sma20Buffer[0];
+    }
+    
+    // Get SMA50
+    int sma50Handle = iMA(symbol, timeframe, 50, 0, MODE_SMA);
+    double sma50 = 0.0;
+    if(sma50Handle != INVALID_HANDLE)
+    {
+        double sma50Buffer[];
+        ArraySetAsSeries(sma50Buffer, true);
+        if(CopyBuffer(sma50Handle, 0, 0, 1, sma50Buffer) > 0)
+            sma50 = sma50Buffer[0];
+    }
+    
+    // Get EMA20
+    int ema20Handle = iMA(symbol, timeframe, 20, 0, MODE_EMA);
+    double ema20 = 0.0;
+    if(ema20Handle != INVALID_HANDLE)
+    {
+        double ema20Buffer[];
+        ArraySetAsSeries(ema20Buffer, true);
+        if(CopyBuffer(ema20Handle, 0, 0, 1, ema20Buffer) > 0)
+            ema20 = ema20Buffer[0];
+    }
+    
+    double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
     
     int bullishSignals = 0;
     int bearishSignals = 0;
@@ -390,8 +431,20 @@ string CMultiTimeframeAnalyzer::GetTimeframeTrend(string symbol, ENUM_TIMEFRAMES
     else bearishSignals++;
     
     //--- MACD signal
-    double macd_main = iMACD(symbol, timeframe, 12, 26, 9, PRICE_CLOSE, MODE_MAIN, 0);
-    double macd_signal = iMACD(symbol, timeframe, 12, 26, 9, PRICE_CLOSE, MODE_SIGNAL, 0);
+    int macdHandle = iMACD(symbol, timeframe, 12, 26, 9);
+    double macd_main = 0.0;
+    double macd_signal = 0.0;
+    
+    if(macdHandle != INVALID_HANDLE)
+    {
+        double macdMainBuffer[], macdSignalBuffer[];
+        ArraySetAsSeries(macdMainBuffer, true);
+        ArraySetAsSeries(macdSignalBuffer, true);
+        if(CopyBuffer(macdHandle, 0, 0, 1, macdMainBuffer) > 0)
+            macd_main = macdMainBuffer[0];
+        if(CopyBuffer(macdHandle, 1, 0, 1, macdSignalBuffer) > 0)
+            macd_signal = macdSignalBuffer[0];
+    }
     
     if(macd_main > macd_signal) bullishSignals++;
     else bearishSignals++;
@@ -411,7 +464,7 @@ string CMultiTimeframeAnalyzer::GetTimeframeTrend(string symbol, ENUM_TIMEFRAMES
 double CMultiTimeframeAnalyzer::GetTimeframeMomentum(string symbol, ENUM_TIMEFRAMES timeframe)
 {
     //--- Use RSI and ROC for momentum
-    double rsi = iRSI(symbol, timeframe, 14, PRICE_CLOSE, 0);
+    double rsi = iRSI(symbol, timeframe, 14, 0);
     
     //--- Calculate Rate of Change
     double currentPrice = iClose(symbol, timeframe, 0);
@@ -429,7 +482,7 @@ double CMultiTimeframeAnalyzer::GetTimeframeMomentum(string symbol, ENUM_TIMEFRA
 //+------------------------------------------------------------------+
 double CMultiTimeframeAnalyzer::GetTimeframeVolatility(string symbol, ENUM_TIMEFRAMES timeframe)
 {
-    double atr = iATR(symbol, timeframe, 14, 0);
+    double atr = iATR(symbol, timeframe, 14);
     double price = iClose(symbol, timeframe, 0);
     
     //--- Convert to percentage volatility
@@ -772,3 +825,7 @@ void CMultiTimeframeAnalyzer::PrintMultiTimeframeAnalysis(string symbol)
     
     Print("═══════════════════════════════════════");
 }
+
+//+------------------------------------------------------------------+
+//| End of CMultiTimeframeAnalyzer class implementation             |
+//+------------------------------------------------------------------+

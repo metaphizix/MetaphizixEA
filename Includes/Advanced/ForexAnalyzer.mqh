@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "../Core/Config.mqh"
 
 //+------------------------------------------------------------------+
 //| Technical analysis enumerations                                 |
@@ -178,8 +178,8 @@ public:
     //--- Initialization
     bool Initialize(ENUM_TIMEFRAMES primaryTF = PERIOD_H1);
     bool InitializeIndicators(const string symbol);
-    void SetIndicatorConfiguration(const SIndicatorConfig &configs[]);
-    void EnableMultiTimeframeAnalysis(const ENUM_TIMEFRAMES timeframes[]);
+    void SetIndicatorConfiguration(SIndicatorConfig &configs[]);
+    void EnableMultiTimeframeAnalysis(ENUM_TIMEFRAMES &timeframes[]);
     
     //--- Main analysis methods
     bool AnalyzeSymbol(const string symbol);
@@ -296,7 +296,7 @@ private:
     double CalculateVolatility(const string symbol, int period, ENUM_TIMEFRAMES tf);
     
     //--- Signal combination logic
-    double CombineIndicatorSignals(const string symbol, const double signals[]);
+    double CombineIndicatorSignals(const string symbol, double &signals[]);
     ENUM_SIGNAL_STRENGTH DetermineSignalStrength(double confidence);
     
     //--- Validation helpers

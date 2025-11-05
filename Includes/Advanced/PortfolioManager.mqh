@@ -188,7 +188,7 @@ CPortfolioManager::CPortfolioManager()
     m_enableRiskManagement = true;
     
     //--- Initialize metrics
-    m_metrics.totalEquity = AccountBalance();
+    m_metrics.totalEquity = AccountInfoDouble(ACCOUNT_BALANCE);
     m_metrics.totalProfit = 0.0;
     m_metrics.totalLoss = 0.0;
     m_metrics.maxDrawdown = 0.0;
@@ -208,22 +208,22 @@ bool CPortfolioManager::Initialize(double maxRiskPerTrade = 2.0, double maxPortf
     m_maxRiskPerTrade = maxRiskPerTrade;
     m_maxPortfolioRisk = maxPortfolioRisk;
     
-    //--- Load existing positions
-    for(int i = 0; i < OrdersTotal(); i++)
+    //--- Load existing positions (MQL5 style)
+    for(int i = 0; i < PositionsTotal(); i++)
     {
-        if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+        if(PositionSelectByIndex(i))
         {
             if(m_positionCount < 100)
             {
-                m_positions[m_positionCount].symbol = OrderSymbol();
-                m_positions[m_positionCount].orderType = (ENUM_ORDER_TYPE)OrderType();
-                m_positions[m_positionCount].lotSize = OrderLots();
-                m_positions[m_positionCount].entryPrice = OrderOpenPrice();
-                m_positions[m_positionCount].stopLoss = OrderStopLoss();
-                m_positions[m_positionCount].takeProfit = OrderTakeProfit();
-                m_positions[m_positionCount].openTime = OrderOpenTime();
-                m_positions[m_positionCount].ticket = OrderTicket();
-                m_positions[m_positionCount].profit = OrderProfit();
+                m_positions[m_positionCount].symbol = PositionGetString(POSITION_SYMBOL);
+                m_positions[m_positionCount].orderType = (ENUM_ORDER_TYPE)PositionGetInteger(POSITION_TYPE);
+                m_positions[m_positionCount].lotSize = PositionGetDouble(POSITION_VOLUME);
+                m_positions[m_positionCount].entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+                m_positions[m_positionCount].stopLoss = PositionGetDouble(POSITION_SL);
+                m_positions[m_positionCount].takeProfit = PositionGetDouble(POSITION_TP);
+                m_positions[m_positionCount].openTime = (datetime)PositionGetInteger(POSITION_TIME);
+                m_positions[m_positionCount].ticket = PositionGetInteger(POSITION_TICKET);
+                m_positions[m_positionCount].profit = PositionGetDouble(POSITION_PROFIT);
                 m_positions[m_positionCount].isActive = true;
                 
                 m_positionCount++;
@@ -288,7 +288,7 @@ bool CPortfolioManager::AddPosition(string symbol, ENUM_ORDER_TYPE orderType, do
     //--- Calculate risk
     double riskAmount = MathAbs(entryPrice - stopLoss) * lotSize * SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
     m_positions[m_positionCount].riskAmount = riskAmount;
-    m_positions[m_positionCount].maxRisk = (riskAmount / AccountBalance()) * 100;
+    m_positions[m_positionCount].maxRisk = (riskAmount / AccountInfoDouble(ACCOUNT_BALANCE)) * 100;
     
     m_positionCount++;
     
@@ -392,7 +392,7 @@ double CPortfolioManager::CalculatePortfolioRisk()
 bool CPortfolioManager::ValidateNewPosition(string symbol, ENUM_ORDER_TYPE orderType, double lotSize)
 {
     //--- Check individual trade risk limit
-    double tradeRisk = (lotSize * 100) / (AccountBalance() / 1000); // Simplified risk calculation
+    double tradeRisk = (lotSize * 100) / (AccountInfoDouble(ACCOUNT_BALANCE) / 1000); // Simplified risk calculation
     if(tradeRisk > m_maxRiskPerTrade)
     {
         Print("❌ Trade risk (", DoubleToString(tradeRisk, 2), "%) exceeds limit (", m_maxRiskPerTrade, "%)");
@@ -506,7 +506,7 @@ double CPortfolioManager::CalculatePortfolioCorrelation(string newSymbol, ENUM_O
 //+------------------------------------------------------------------+
 double CPortfolioManager::CalculateOptimalLotSize(string symbol, double riskPercent)
 {
-    double accountBalance = AccountBalance();
+    double accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
     double riskAmount = accountBalance * (riskPercent / 100.0);
     
     //--- Get symbol specifications
@@ -604,7 +604,7 @@ int CPortfolioManager::FindPositionByTicket(int ticket)
 //+------------------------------------------------------------------+
 double CPortfolioManager::CalculateMaxDrawdown()
 {
-    double maxEquity = AccountBalance();
+    double maxEquity = AccountInfoDouble(ACCOUNT_BALANCE);
     double currentEquity = AccountEquity();
     
     //--- Find historical peak

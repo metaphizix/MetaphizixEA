@@ -9,6 +9,20 @@
 #property strict
 
 //+------------------------------------------------------------------+
+//| Market session information structure                            |
+//+------------------------------------------------------------------+
+struct SessionData
+{
+    string sessionName;
+    int startHour;
+    int endHour;
+    double avgSpread;
+    double normalSpread;
+    bool isActive;
+    double spreadMultiplier;
+};
+
+//+------------------------------------------------------------------+
 //| Spread Manipulation Detection Class                           |
 //+------------------------------------------------------------------+
 class CSpreadManipulationDetector
@@ -41,18 +55,6 @@ private:
         double iqrSpread;
         int sampleSize;
         datetime lastUpdate;
-    };
-    
-    //--- Market session information
-    struct SessionData
-    {
-        string sessionName;
-        int startHour;
-        int endHour;
-        double avgSpread;
-        double normalSpread;
-        bool isActive;
-        double spreadMultiplier;
     };
     
     //--- Manipulation patterns
@@ -176,9 +178,9 @@ private:
     void RemoveOldData(void);
     
     //--- Mathematical functions
-    double Percentile(double data[], int size, double percentile);
-    double Median(double data[], int size);
-    double InterquartileRange(double data[], int size);
+    double Percentile(double &data[], int size, double percentile);
+    double Median(double &data[], int size);
+    double InterquartileRange(double &data[], int size);
     void SortArray(double &array[], int size);
 };
 

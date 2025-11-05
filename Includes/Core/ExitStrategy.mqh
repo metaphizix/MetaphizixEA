@@ -648,43 +648,6 @@ bool CExitStrategy::ApplyFullExit(ulong ticket, ENUM_EXIT_TYPE reason)
 }
 
 //+------------------------------------------------------------------+
-//| Process all exits for all positions                             |
-//+------------------------------------------------------------------+
-void CExitStrategy::ProcessAllExits()
-{
-    for(int i = 0; i < PositionsTotal(); i++)
-    {
-        if(PositionSelectByIndex(i))
-        {
-            ulong ticket = PositionGetInteger(POSITION_TICKET);
-            string symbol = PositionGetString(POSITION_SYMBOL);
-            
-            // Auto-register position if not already tracked
-            if(!IsPositionTracked(ticket))
-            {
-                RegisterPosition(ticket, GetPositionVolume(ticket));
-            }
-            
-            // Calculate ATR for trailing stop
-            double atr = 0;
-            for(int j = 1; j <= 14; j++)
-            {
-                double high = iHigh(symbol, PERIOD_H1, j);
-                double low = iLow(symbol, PERIOD_H1, j);
-                double prevClose = iClose(symbol, PERIOD_H1, j + 1);
-                
-                double tr = MathMax(high - low, MathMax(MathAbs(high - prevClose), MathAbs(low - prevClose)));
-                atr += tr;
-            }
-            atr /= 14.0;
-            
-            // Process exits for this position
-            ProcessPositionExits(ticket);
-        }
-    }
-}
-
-//+------------------------------------------------------------------+
 //| Process emergency exits                                         |
 //+------------------------------------------------------------------+
 void CExitStrategy::ProcessEmergencyExits()
@@ -1764,16 +1727,9 @@ double CExitStrategy::GetMinStopLevel(const string symbol)
 }
 
 //+------------------------------------------------------------------+
-//| Signal enumeration for exit strategy integration               |
+//| Signal enumeration - using ENUM_SIGNAL_TYPE from ForexAnalyzer |
 //+------------------------------------------------------------------+
-enum ENUM_SIGNAL_TYPE
-{
-    SIGNAL_NONE,      // No signal
-    SIGNAL_BUY,       // Buy signal
-    SIGNAL_SELL,      // Sell signal
-    SIGNAL_CLOSE_BUY, // Close buy signal
-    SIGNAL_CLOSE_SELL // Close sell signal
-};
+// ENUM_SIGNAL_TYPE is defined in ForexAnalyzer.mqh to avoid conflicts
 
 //+------------------------------------------------------------------+
 //| End of ExitStrategy class implementation                        |

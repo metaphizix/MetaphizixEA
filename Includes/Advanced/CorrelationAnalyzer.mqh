@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "../Core/Config.mqh"
 
 //+------------------------------------------------------------------+
 //| Correlation analysis enumerations                               |
@@ -69,10 +69,10 @@ struct SCorrelationPair
 struct SCorrelationMatrix
 {
     string symbols[];
-    double correlationMatrix[][]; // [i][j] = correlation between symbols[i] and symbols[j]
+    double correlationMatrix[]; // Flattened matrix [i*n+j] = correlation between symbols[i] and symbols[j]
     datetime lastUpdate;
     double eigenValues[];       // For principal component analysis
-    double eigenVectors[][];    // Eigenvectors for PCA
+    double eigenVectors[];      // Flattened eigenvectors for PCA
 };
 
 struct SPortfolioCorrelation
@@ -103,16 +103,16 @@ private:
     SPortfolioCorrelation m_portfolioStats;
     
     // Price data storage for correlation calculation
-    double m_priceData[][]; // [symbol_index][time_index]
+    double m_priceData[]; // Flattened [symbol_index*time_count+time_index]
     datetime m_timeStamps[];
     string m_trackedSymbols[];
     
     // Dynamic correlation tracking
-    double m_dynamicCorrelations[][];
+    double m_dynamicCorrelations[]; // Flattened dynamic correlations
     datetime m_lastCorrelationUpdate[];
     
     // Regime detection
-    ENUM_CORRELATION_REGIME m_correlationRegimes[][];
+    ENUM_CORRELATION_REGIME m_correlationRegimes[]; // Flattened regime data
     double m_regimeChangeThreshold;
     
 public:
@@ -123,13 +123,13 @@ public:
     //--- Initialization
     bool Initialize(const SCorrelationConfig &config);
     bool AddSymbolPair(const string symbol1, const string symbol2);
-    bool AddSymbols(const string symbols[]);
+    bool AddSymbols(string &symbols[]);
     void SetConfiguration(const SCorrelationConfig &config);
     
     //--- Main correlation analysis
     bool UpdateCorrelations();
     bool CalculateCorrelationMatrix();
-    bool AnalyzePortfolioCorrelations(const string symbols[], const double weights[]);
+    bool AnalyzePortfolioCorrelations(string &symbols[], double &weights[]);
     
     //--- Correlation calculation methods
     double CalculatePearsonCorrelation(const string symbol1, const string symbol2, int period = 0);
@@ -149,16 +149,16 @@ public:
     double GetCorrelationVolatility(const string symbol1, const string symbol2);
     
     //--- Risk management applications
-    bool IsExcessiveCorrelation(const string symbols[]);
-    double CalculateConcentrationRisk(const string symbols[], const double volumes[]);
+    bool IsExcessiveCorrelation(string &symbols[]);
+    double CalculateConcentrationRisk(string &symbols[], double &volumes[]);
     bool ShouldLimitExposure(const string symbol1, const string symbol2, double proposedVolume);
-    double GetMaxAllowedExposure(const string symbol, const string correlatedSymbols[]);
+    double GetMaxAllowedExposure(const string symbol, string &correlatedSymbols[]);
     
     //--- Portfolio optimization
-    double CalculateDiversificationRatio(const string symbols[], const double weights[]);
-    double CalculatePortfolioVariance(const string symbols[], const double weights[]);
-    void OptimizePortfolioWeights(const string symbols[], double weights[]);
-    bool IsPortfolioDiversified(const string symbols[], const double weights[]);
+    double CalculateDiversificationRatio(string &symbols[], double &weights[]);
+    double CalculatePortfolioVariance(string &symbols[], double &weights[]);
+    void OptimizePortfolioWeights(string &symbols[], double &weights[]);
+    bool IsPortfolioDiversified(string &symbols[], double &weights[]);
     
     //--- Principal Component Analysis
     bool PerformPCA();
@@ -172,21 +172,21 @@ public:
     double CalculateCorrelationHalfLife(const string symbol1, const string symbol2);
     
     //--- Event analysis
-    bool DetectCorrelationSurge(const string symbols[]);
-    bool IsStressCorrelation(const string symbols[]);
+    bool DetectCorrelationSurge(string &symbols[]);
+    bool IsStressCorrelation(string &symbols[]);
     bool DetectDecoupling(const string symbol1, const string symbol2);
     
     //--- Cross-asset correlations
     double CalculateFXEquityCorrelation(const string fxPair, const string equityIndex);
     double CalculateFXBondCorrelation(const string fxPair, const string bondIndex);
-    double CalculateIntermarketCorrelation(const string symbols[], const string markets[]);
+    double CalculateIntermarketCorrelation(string &symbols[], string &markets[]);
     
     //--- Getters and utilities
     double GetCorrelation(const string symbol1, const string symbol2);
     SCorrelationPair GetCorrelationPair(const string symbol1, const string symbol2);
     SCorrelationMatrix GetCorrelationMatrix() { return m_correlationMatrix; }
-    double GetAverageCorrelation(const string symbols[]);
-    double GetMaxCorrelation(const string symbols[]);
+    double GetAverageCorrelation(string &symbols[]);
+    double GetMaxCorrelation(string &symbols[]);
     
     //--- Risk metrics
     double GetPortfolioConcentrationRisk() { return m_portfolioStats.concentrationRisk; }
@@ -202,13 +202,13 @@ private:
     //--- Internal calculation helpers
     bool UpdatePriceData();
     double CalculateReturns(const string symbol, int period);
-    void GetPriceReturns(const string symbol, double returns[], int period);
+    void GetPriceReturns(const string symbol, double &returns[], int period);
     
     //--- Statistical functions
-    double CalculateCovariance(const double data1[], const double data2[], int size);
-    double CalculateVariance(const double data[], int size);
-    double CalculateMean(const double data[], int size);
-    double CalculateStandardDeviation(const double data[], int size);
+    double CalculateCovariance(double &data1[], double &data2[], int size);
+    double CalculateVariance(double &data[], int size);
+    double CalculateMean(double &data[], int size);
+    double CalculateStandardDeviation(double &data[], int size);
     
     //--- Array management
     int FindSymbolIndex(const string symbol);
@@ -216,15 +216,15 @@ private:
     void ResizePriceDataArrays(int symbolCount, int timeCount);
     void UpdateCorrelationHistory(const string symbol1, const string symbol2, double correlation);
     
-    //--- Matrix operations
-    bool InvertMatrix(double matrix[][], int size);
-    void MultiplyMatrices(const double matrix1[][], const double matrix2[][], double result[][], int size);
-    bool CalculateEigenValues(const double matrix[][], double eigenValues[], int size);
+    //--- Matrix operations (note: these would need special handling for 2D arrays in MQL5)
+    bool InvertMatrix(double &matrixData[], int size);
+    void MultiplyMatrices(double &matrix1Data[], double &matrix2Data[], double &resultData[], int size);
+    bool CalculateEigenValues(double &matrixData[], double &eigenValues[], int size);
     
     //--- PCA implementation
-    void StandardizeData(double data[][], int rows, int cols);
-    void CalculateCovarianceMatrix(const double data[][], double covMatrix[][], int rows, int cols);
-    bool SolveEigenProblem(const double matrix[][], double eigenValues[], double eigenVectors[][], int size);
+    void StandardizeData(double &data[], int rows, int cols);
+    void CalculateCovarianceMatrix(double &data[], double &covMatrix[], int rows, int cols);
+    bool SolveEigenProblem(double &matrixData[], double &eigenValues[], double &eigenVectors[], int size);
     
     //--- Regime detection helpers
     void UpdateRegimeHistory(const string symbol1, const string symbol2, ENUM_CORRELATION_REGIME regime);

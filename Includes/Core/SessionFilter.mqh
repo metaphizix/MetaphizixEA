@@ -31,6 +31,19 @@ enum ENUM_SESSION_QUALITY
     SESSION_QUALITY_EXCELLENT   // Excellent liquidity/activity
 };
 
+//--- Session time definitions (in server time)
+struct SSessionTimes
+{
+    int asian_start_hour;
+    int asian_end_hour;
+    int european_start_hour;
+    int european_end_hour;
+    int american_start_hour;
+    int american_end_hour;
+    int pacific_start_hour;
+    int pacific_end_hour;
+};
+
 enum ENUM_TIME_ZONE
 {
     TIMEZONE_UTC,               // UTC time
@@ -121,6 +134,12 @@ private:
     SSessionInfo m_sessions[];
     SSessionStatistics m_sessionStats[];
     
+    // Session timing (primary storage)
+    int m_sessionStartHour;
+    int m_sessionEndHour;
+    bool m_enableWeekendFilter;
+    bool m_enableHolidayFilter;
+    
     // Market activity tracking
     SMarketActivity m_marketActivity[];
     string m_trackedSymbols[];
@@ -135,9 +154,9 @@ private:
     string m_holidayNames[];
     
     // Performance tracking
-    double m_sessionVolatility[][];  // [session][hour]
-    double m_sessionSpreads[][];     // [session][hour]
-    double m_sessionLiquidity[][];   // [session][hour]
+    double m_sessionVolatility[4][24];  // [session][hour] - 4 sessions, 24 hours
+    double m_sessionSpreads[4][24];     // [session][hour]
+    double m_sessionLiquidity[4][24];   // [session][hour]
     
 public:
     //--- Constructor/Destructor
@@ -271,6 +290,9 @@ private:
     int GetCurrentMinuteUTC();
     datetime GetCurrentTimeInTimezone(ENUM_TIME_ZONE timezone);
     bool IsWithinTimeRange(int currentHour, int currentMinute, int startHour, int startMinute, int endHour, int endMinute);
+    datetime ConvertToSAST(datetime utcTime);
+    datetime ConvertFromSAST(datetime sastTime);
+    int GetCurrentHourSAST();
     
     //--- Market analysis helpers
     void UpdateVolatilityMetrics(const string symbol);
@@ -303,7 +325,7 @@ private:
     void LogSessionChange(ENUM_TRADING_SESSION oldSession, ENUM_TRADING_SESSION newSession);
     void LogTradingDecision(const string symbol, bool allowed, const string reason);
     void LogSessionStatistics();
-};
+    
     bool IsLowVolatilityPeriod();
     double GetSessionVolatilityMultiplier();
     
@@ -503,7 +525,7 @@ int CSessionFilter::GetCurrentHourSAST()
 //+------------------------------------------------------------------+
 //| Check if high volatility period                                 |
 //+------------------------------------------------------------------+
-bool CSessionFilter::IsHighVolatilityPeriod()
+bool CSessionFilter::IsHighVolatilityPeriod(const string symbol)
 {
     // High volatility during session overlaps and major news times
     if(IsSessionOverlap())
@@ -543,7 +565,7 @@ bool CSessionFilter::IsLowVolatilityPeriod()
 //+------------------------------------------------------------------+
 double CSessionFilter::GetSessionVolatilityMultiplier()
 {
-    if(IsHighVolatilityPeriod())
+    if(IsHighVolatilityPeriod(Symbol()))
         return 1.5; // Increase sensitivity during high volatility
     
     if(IsLowVolatilityPeriod())

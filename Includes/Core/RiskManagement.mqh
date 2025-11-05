@@ -6,7 +6,8 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "Config.mqh"  // Must come first for ENUM_SIGNAL_TYPE
+#include "SignalManager.mqh"
 
 //+------------------------------------------------------------------+
 //| Risk management enumerations                                    |
@@ -228,16 +229,15 @@ private:
     void LogRiskMetrics();
     void LogCorrelationMatrix();
 };
-};
 
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
 //+------------------------------------------------------------------+
 CRiskManagement::CRiskManagement()
 {
-    m_accountRiskPercent = 1.0;
-    m_maxOpenTrades = 10;
-    m_correlationThreshold = 0.8;
+    m_config.baseRiskPercent = 1.0;
+    m_config.maxOpenTrades = 10;
+    m_config.correlationThreshold = 0.8;
 }
 
 //+------------------------------------------------------------------+
@@ -252,9 +252,9 @@ CRiskManagement::~CRiskManagement()
 //+------------------------------------------------------------------+
 bool CRiskManagement::Initialize(double riskPercent, int maxTrades, double correlationThreshold)
 {
-    m_accountRiskPercent = riskPercent;
-    m_maxOpenTrades = maxTrades;
-    m_correlationThreshold = correlationThreshold;
+    m_config.baseRiskPercent = riskPercent;
+    m_config.maxOpenTrades = maxTrades;
+    m_config.correlationThreshold = correlationThreshold;
     
     CConfig::LogInfo(StringFormat("Risk Management initialized - Risk: %.1f%%, Max Trades: %d, Correlation: %.2f", 
                      riskPercent, maxTrades, correlationThreshold));
@@ -265,12 +265,12 @@ bool CRiskManagement::Initialize(double riskPercent, int maxTrades, double corre
 //+------------------------------------------------------------------+
 //| Calculate position size based on risk                           |
 //+------------------------------------------------------------------+
-double CRiskManagement::CalculatePositionSize(string symbol, double stopLossDistance)
+double CRiskManagement::CalculatePositionSize(const string symbol, double stopLossDistance, double confidence = 1.0)
 {
     if(stopLossDistance <= 0)
         return 0;
     
-    double riskAmount = CalculateRiskAmount();
+    double riskAmount = CalculateRiskAmount() * confidence;
     double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
     double tickSize = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
     double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
@@ -297,16 +297,17 @@ double CRiskManagement::CalculatePositionSize(string symbol, double stopLossDist
 //+------------------------------------------------------------------+
 //| Calculate risk amount in account currency                       |
 //+------------------------------------------------------------------+
-double CRiskManagement::CalculateRiskAmount()
+double CRiskManagement::CalculateRiskAmount(double riskPercent = 0)
 {
     double accountBalance = GetAccountBalance();
-    return accountBalance * (m_accountRiskPercent / 100.0);
+    double effectiveRiskPercent = (riskPercent > 0) ? riskPercent : m_config.baseRiskPercent;
+    return accountBalance * (effectiveRiskPercent / 100.0);
 }
 
 //+------------------------------------------------------------------+
 //| Check if risk is acceptable                                      |
 //+------------------------------------------------------------------+
-bool CRiskManagement::IsRiskAcceptable(string symbol, double positionSize)
+bool CRiskManagement::IsRiskAcceptable(const string symbol, double positionSize, double confidence = 1.0)
 {
     // Check if we can open new trade
     if(!CanOpenNewTrade())
@@ -318,7 +319,7 @@ bool CRiskManagement::IsRiskAcceptable(string symbol, double positionSize)
     
     // Check overall portfolio risk
     double portfolioRisk = GetPortfolioRisk();
-    if(portfolioRisk > m_accountRiskPercent * 3) // Max 3x base risk
+    if(portfolioRisk > m_config.baseRiskPercent * 3) // Max 3x base risk
         return false;
     
     return true;
@@ -327,10 +328,11 @@ bool CRiskManagement::IsRiskAcceptable(string symbol, double positionSize)
 //+------------------------------------------------------------------+
 //| Check if we can open new trade                                  |
 //+------------------------------------------------------------------+
-bool CRiskManagement::CanOpenNewTrade()
+bool CRiskManagement::CanOpenNewTrade(const string symbol = "")
 {
-    return GetCurrentOpenTrades() < m_maxOpenTrades;
+    return PositionsTotal() < m_config.maxOpenTrades;
 }
+
 
 //+------------------------------------------------------------------+
 //| Get current portfolio risk                                       |
@@ -338,7 +340,7 @@ bool CRiskManagement::CanOpenNewTrade()
 double CRiskManagement::GetPortfolioRisk()
 {
     double totalRisk = 0;
-    double accountBalance = GetAccountBalance();
+    double accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
     
     for(int i = 0; i < PositionsTotal(); i++)
     {

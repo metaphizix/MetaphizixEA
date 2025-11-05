@@ -473,7 +473,11 @@ bool CFibonacci::ValidateFibonacciResistance(double level, int lookbackBars = 50
 bool CFibonacci::AnalyzeFibonacciMomentum(string symbol)
 {
     //--- Use RSI to confirm momentum
-    double rsi = iRSI(symbol, m_currentPattern.timeframe, 14, PRICE_CLOSE, 0);
+    int rsiHandle = iRSI(symbol, m_currentPattern.timeframe, 14, PRICE_CLOSE);
+    double rsiBuffer[];
+    ArraySetAsSeries(rsiBuffer, true);
+    CopyBuffer(rsiHandle, 0, 0, 1, rsiBuffer);
+    double rsi = rsiBuffer[0];
     
     if(m_currentPattern.suggestedDirection == ORDER_TYPE_BUY)
     {
@@ -602,15 +606,15 @@ bool CFibonacci::ValidateWithVolumeProfile(double fibLevel)
 //+------------------------------------------------------------------+
 void CFibonacci::RemoveAllFibonacciObjects()
 {
-    int totalObjects = ObjectsTotal();
+    int totalObjects = ObjectsTotal(0);
     
     for(int i = totalObjects - 1; i >= 0; i--)
     {
-        string objName = ObjectName(i);
+        string objName = ObjectName(0, i);
         
         if(StringFind(objName, "Fib_") == 0)
         {
-            ObjectDelete(objName);
+            ObjectDelete(0, objName);
         }
     }
     

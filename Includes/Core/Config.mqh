@@ -1,10 +1,30 @@
-//+------------------------------------------------------------------+
+﻿//+------------------------------------------------------------------+
 //|                                                       Config.mqh |
 //|                                  Copyright 2025, Metaphizix Ltd. |
 //|                           https://github.com/metaphizix/MetaphizixEA |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
+
+#ifndef CONFIG_MQH
+#define CONFIG_MQH
+
+//+------------------------------------------------------------------+
+//| Signal type enumeration                                         |
+//+------------------------------------------------------------------+
+// Signal type enum
+enum ENUM_SIGNAL_TYPE
+{
+    SIGNAL_NONE           = 0, // No signal
+    SIGNAL_BUY            = 1, // Buy signal
+    SIGNAL_SELL           = 2, // Sell signal
+    SIGNAL_BUY_ENTRY      = 3, // Buy entry signal
+    SIGNAL_SELL_ENTRY     = 4, // Sell entry signal
+    SIGNAL_BUY_EXIT       = 5, // Buy exit signal
+    SIGNAL_SELL_EXIT      = 6, // Sell exit signal
+    SIGNAL_HOLD           = 7, // Hold current position
+    SIGNAL_REDUCE         = 8  // Reduce position size
+};
 
 //+------------------------------------------------------------------+
 //| Enumerations for configuration                                  |
@@ -121,7 +141,15 @@ public:
     static SProfileConfig GetCurrentProfile();
     
     //--- Core getters
-    static void GetTradingPairs(string &pairs[]) { ArrayCopy(pairs, m_tradingPairs); }
+    static void GetTradingPairs(string &pairs[])
+    {
+        if(ArraySize(m_tradingPairs) > 0)
+        {
+            int size = MathMin(ArraySize(m_tradingPairs), ArraySize(pairs));
+            if(size > 0)
+                ArrayCopy(pairs, m_tradingPairs, 0, 0, size);
+        }
+    }
     static int GetMaxConcurrentPairs() { return m_maxConcurrentPairs; }
     static int GetOrderBlockLookback() { return m_orderBlockLookback; }
     static double GetMinOrderBlockSize() { return m_minOrderBlockSize; }
@@ -361,7 +389,9 @@ bool CConfig::ParseTradingPairs(string pairsString)
     
     for(int i = 0; i < count; i++)
     {
-        string pair = StringTrimLeft(StringTrimRight(pairs[i]));
+        string pair = pairs[i];
+        StringTrimLeft(pair);
+        StringTrimRight(pair);
         StringToUpper(pair);
         
         if(StringLen(pair) >= 6 && IsValidSymbol(pair))
@@ -421,8 +451,7 @@ bool CConfig::IsValidSymbol(string symbol)
 //+------------------------------------------------------------------+
 void CConfig::LogInfo(string message)
 {
-    if(m_enableLogging)
-        Print("[INFO] ", message);
+    Print("[INFO] ", message);
 }
 
 //+------------------------------------------------------------------+
@@ -430,8 +459,7 @@ void CConfig::LogInfo(string message)
 //+------------------------------------------------------------------+
 void CConfig::LogError(string message)
 {
-    if(m_enableLogging)
-        Print("[ERROR] ", message);
+    Print("[ERROR] ", message);
 }
 
 //+------------------------------------------------------------------+
@@ -439,6 +467,10 @@ void CConfig::LogError(string message)
 //+------------------------------------------------------------------+
 void CConfig::LogDebug(string message)
 {
-    if(m_enableLogging)
+    if(m_logLevel >= LOG_LEVEL_DEBUG)
         Print("[DEBUG] ", message);
 }
+
+
+#endif // CONFIG_MQH
+

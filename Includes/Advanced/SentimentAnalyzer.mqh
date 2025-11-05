@@ -91,6 +91,12 @@ private:
         double volumeSentiment;            // Volume confirmation sentiment
         double volatilitySentiment;        // Volatility regime sentiment
         
+        // Additional sentiment indicators
+        double commitmentOfTraders;        // COT sentiment score
+        double institutionalFlow;          // Institutional flow sentiment
+        double retailSentiment;            // Retail sentiment score
+        double fearGreedIndex;             // Fear & greed index
+        
         double overallSentiment;           // Composite sentiment score
         datetime lastUpdate;
     };
@@ -138,6 +144,46 @@ private:
     };
     
     AlternativeSentiment m_alternativeSentiment;
+    
+    //--- News data structures
+    struct NewsDataPoint
+    {
+        string headline;
+        double sentimentScore;
+        int importance;
+        datetime timestamp;
+        string category;
+        string impact;
+    };
+    
+    NewsDataPoint m_newsData[100];
+    int m_newsCount;
+    
+    //--- Positioning data structures
+    struct PositioningData
+    {
+        double longPositions;
+        double shortPositions;
+        double netPositioning;
+        bool isExtremePositioning;
+        ENUM_ORDER_TYPE contrarian_signal;
+    };
+    
+    PositioningData m_positioning[10];
+    int m_positioningCount;
+    
+    //--- Social sentiment data structures
+    struct SocialSentiment
+    {
+        double twitterSentiment;
+        double redditSentiment;
+        double forumSentiment;
+        int socialVolume;
+        string dominantEmotion;
+        bool isTrending;
+    };
+    
+    SocialSentiment m_socialSentiment;
 
 public:
     //--- Constructor
@@ -179,6 +225,7 @@ public:
     double ExtractEconomicDataSentiment(string currency);
     double AnalyzeInflationSentiment(string currency);
     double GetEmploymentSentiment(string currency);
+    double AnalyzeGDPGrowthSentiment(string currency);
     double CalculateGDPGrowthSentiment(string currency);
     double GetTradingBalanceSentiment(string currency);
     
@@ -256,6 +303,16 @@ public:
     bool IsSentimentAligned(string symbol, ENUM_ORDER_TYPE direction);
     double GetSentimentDivergence(string symbol);
     bool DetectSentimentReversal(string symbol);
+    bool DetectSentimentExtremes(string symbol);
+    
+    //--- Data update methods
+    void UpdateSentimentData(string symbol);
+    bool UpdateSocialSentiment(string symbol);
+    
+    //--- Economic and financial data methods
+    double GetInterestRate(string currency);
+    double GetEconomicStrength(string currency);
+    double CalculateFearGreedIndex(string symbol);
     
     //--- Machine learning integration
     void TrainSentimentModel();
@@ -264,9 +321,9 @@ public:
     
     //--- Information functions
     SentimentIndicators GetSentimentData() { return m_sentiment; }
-    TechnicalSentiment GetTechnicalSentiment() { return m_technicalSentiment; }
-    SocialSentiment GetSocialSentiment() { return m_socialSentiment; }
-    double GetOverallBullishPercent() { return m_technicalSentiment.bullishPercent; }
+    double GetTechnicalSentiment() { return 50.0; } // Placeholder - return double instead of undefined struct
+    double GetSocialSentiment() { return 50.0; } // Placeholder - return double instead of undefined struct
+    double GetOverallBullishPercent() { return 50.0; } // Placeholder implementation
     
     //--- Reporting
     void PrintSentimentSummary(string symbol);
@@ -571,8 +628,18 @@ double CSentimentAnalyzer::MeasureHerdingBehavior(string symbol)
     
     //--- Analyze if market is following trends blindly
     double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
-    double sma20 = iMA(symbol, PERIOD_D1, 20, 0, MODE_SMA, PRICE_CLOSE, 0);
-    double sma50 = iMA(symbol, PERIOD_D1, 50, 0, MODE_SMA, PRICE_CLOSE, 0);
+    
+    int sma20_h = iMA(symbol, PERIOD_D1, 20, 0, MODE_SMA, PRICE_CLOSE);
+    int sma50_h = iMA(symbol, PERIOD_D1, 50, 0, MODE_SMA, PRICE_CLOSE);
+    
+    double sma20_buf[], sma50_buf[];
+    ArraySetAsSeries(sma20_buf, true);
+    ArraySetAsSeries(sma50_buf, true);
+    CopyBuffer(sma20_h, 0, 0, 1, sma20_buf);
+    CopyBuffer(sma50_h, 0, 0, 1, sma50_buf);
+    
+    double sma20 = sma20_buf[0];
+    double sma50 = sma50_buf[0];
     
     //--- Strong trend following suggests herding
     if(currentPrice > sma20 && sma20 > sma50)
@@ -788,25 +855,6 @@ double CSentimentAnalyzer::GetEconomicCalendarSentiment(string symbol)
     
     return calendarSentiment;
 }
-    
-    //--- Initialize news
-    m_newsCount = 0;
-    
-    //--- Initialize social sentiment
-    m_socialSentiment.twitterSentiment = 50.0;
-    m_socialSentiment.redditSentiment = 50.0;
-    m_socialSentiment.forumSentiment = 50.0;
-    m_socialSentiment.socialVolume = 0.0;
-    m_socialSentiment.dominantEmotion = "Neutral";
-    m_socialSentiment.isTrending = false;
-    
-    //--- Initialize technical sentiment
-    m_technicalSentiment.bullishPercent = 33.0;
-    m_technicalSentiment.bearishPercent = 33.0;
-    m_technicalSentiment.neutralPercent = 34.0;
-    
-    Print("📊 Sentiment Analyzer initialized");
-}
 
 //+------------------------------------------------------------------+
 //| Initialize sentiment analyzer                                   |
@@ -854,44 +902,6 @@ void CSentimentAnalyzer::UpdateSentimentData(string symbol)
 }
 
 //+------------------------------------------------------------------+
-//| Calculate overall sentiment                                    |
-//+------------------------------------------------------------------+
-double CSentimentAnalyzer::CalculateOverallSentiment(string symbol)
-{
-    double technicalWeight = 0.3;
-    double fundamentalWeight = 0.2;
-    double positioningWeight = 0.2;
-    double institutionalWeight = 0.15;
-    double socialWeight = 0.1;
-    double newsWeight = 0.05;
-    
-    double overall = 0.0;
-    
-    //--- Technical sentiment (30%)
-    overall += AnalyzeTechnicalSentiment(symbol) * technicalWeight;
-    
-    //--- Fundamental sentiment (20%)
-    overall += AnalyzeFundamentalSentiment(symbol) * fundamentalWeight;
-    
-    //--- Market positioning (20%)
-    overall += AnalyzeMarketPositioning(symbol) * positioningWeight;
-    
-    //--- Institutional flow (15%)
-    overall += m_sentiment.institutionalFlow * institutionalWeight;
-    
-    //--- Social sentiment (10%)
-    overall += (m_socialSentiment.twitterSentiment + m_socialSentiment.redditSentiment) / 2 * socialWeight;
-    
-    //--- News sentiment (5%)
-    overall += GetNewsConsensus(symbol) * newsWeight;
-    
-    //--- Normalize to 0-100 scale
-    overall = MathMax(0, MathMin(100, overall));
-    
-    return overall;
-}
-
-//+------------------------------------------------------------------+
 //| Analyze technical sentiment                                    |
 //+------------------------------------------------------------------+
 double CSentimentAnalyzer::AnalyzeTechnicalSentiment(string symbol)
@@ -901,9 +911,22 @@ double CSentimentAnalyzer::AnalyzeTechnicalSentiment(string symbol)
     int totalSignals = 0;
     
     //--- Moving average sentiment
-    double sma20 = iMA(symbol, PERIOD_D1, 20, 0, MODE_SMA, PRICE_CLOSE, 0);
-    double sma50 = iMA(symbol, PERIOD_D1, 50, 0, MODE_SMA, PRICE_CLOSE, 0);
-    double sma200 = iMA(symbol, PERIOD_D1, 200, 0, MODE_SMA, PRICE_CLOSE, 0);
+    int sma20_handle = iMA(symbol, PERIOD_D1, 20, 0, MODE_SMA, PRICE_CLOSE);
+    int sma50_handle = iMA(symbol, PERIOD_D1, 50, 0, MODE_SMA, PRICE_CLOSE);
+    int sma200_handle = iMA(symbol, PERIOD_D1, 200, 0, MODE_SMA, PRICE_CLOSE);
+    
+    double sma20_buf[], sma50_buf[], sma200_buf[];
+    ArraySetAsSeries(sma20_buf, true);
+    ArraySetAsSeries(sma50_buf, true);
+    ArraySetAsSeries(sma200_buf, true);
+    
+    CopyBuffer(sma20_handle, 0, 0, 1, sma20_buf);
+    CopyBuffer(sma50_handle, 0, 0, 1, sma50_buf);
+    CopyBuffer(sma200_handle, 0, 0, 1, sma200_buf);
+    
+    double sma20 = sma20_buf[0];
+    double sma50 = sma50_buf[0];
+    double sma200 = sma200_buf[0];
     double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
     
     if(currentPrice > sma20 && sma20 > sma50 && sma50 > sma200)
@@ -922,7 +945,12 @@ double CSentimentAnalyzer::AnalyzeTechnicalSentiment(string symbol)
     totalSignals += 3;
     
     //--- RSI sentiment
-    double rsi = iRSI(symbol, PERIOD_D1, 14, PRICE_CLOSE, 0);
+    int rsi_h = iRSI(symbol, PERIOD_D1, 14, PRICE_CLOSE);
+    double rsi_buf[];
+    ArraySetAsSeries(rsi_buf, true);
+    CopyBuffer(rsi_h, 0, 0, 1, rsi_buf);
+    double rsi = rsi_buf[0];
+    
     if(rsi > 70) bearishSignals++;
     else if(rsi < 30) bullishSignals++;
     else if(rsi > 50) bullishSignals++;
@@ -930,25 +958,39 @@ double CSentimentAnalyzer::AnalyzeTechnicalSentiment(string symbol)
     totalSignals++;
     
     //--- MACD sentiment
-    double macd_main = iMACD(symbol, PERIOD_D1, 12, 26, 9, PRICE_CLOSE, MODE_MAIN, 0);
-    double macd_signal = iMACD(symbol, PERIOD_D1, 12, 26, 9, PRICE_CLOSE, MODE_SIGNAL, 0);
+    int macd_h = iMACD(symbol, PERIOD_D1, 12, 26, 9, PRICE_CLOSE);
+    double macd_main_buf[], macd_signal_buf[];
+    ArraySetAsSeries(macd_main_buf, true);
+    ArraySetAsSeries(macd_signal_buf, true);
+    CopyBuffer(macd_h, 0, 0, 1, macd_main_buf);
+    CopyBuffer(macd_h, 1, 0, 1, macd_signal_buf);
+    double macd_main = macd_main_buf[0];
+    double macd_signal = macd_signal_buf[0];
+    
     if(macd_main > macd_signal && macd_main > 0) bullishSignals++;
     else if(macd_main < macd_signal && macd_main < 0) bearishSignals++;
     totalSignals++;
     
     //--- Bollinger Bands sentiment
-    double bb_upper = iBands(symbol, PERIOD_D1, 20, 2, 0, PRICE_CLOSE, MODE_UPPER, 0);
-    double bb_lower = iBands(symbol, PERIOD_D1, 20, 2, 0, PRICE_CLOSE, MODE_LOWER, 0);
+    int bb_h = iBands(symbol, PERIOD_D1, 20, 0, 2.0, PRICE_CLOSE);
+    double bb_upper_buf[], bb_lower_buf[];
+    ArraySetAsSeries(bb_upper_buf, true);
+    ArraySetAsSeries(bb_lower_buf, true);
+    CopyBuffer(bb_h, 1, 0, 1, bb_upper_buf);
+    CopyBuffer(bb_h, 2, 0, 1, bb_lower_buf);
+    double bb_upper = bb_upper_buf[0];
+    double bb_lower = bb_lower_buf[0];
+    
     if(currentPrice > bb_upper) bearishSignals++; // Overbought
     else if(currentPrice < bb_lower) bullishSignals++; // Oversold
     totalSignals++;
     
-    //--- Calculate percentages
-    m_technicalSentiment.bullishPercent = ((double)bullishSignals / totalSignals) * 100;
-    m_technicalSentiment.bearishPercent = ((double)bearishSignals / totalSignals) * 100;
-    m_technicalSentiment.neutralPercent = 100 - m_technicalSentiment.bullishPercent - m_technicalSentiment.bearishPercent;
+    //--- Calculate percentages (simplified without struct)
+    double bullishPercent = ((double)bullishSignals / totalSignals) * 100;
+    double bearishPercent = ((double)bearishSignals / totalSignals) * 100;
+    double neutralPercent = 100 - bullishPercent - bearishPercent;
     
-    return m_technicalSentiment.bullishPercent;
+    return bullishPercent;
 }
 
 //+------------------------------------------------------------------+
@@ -1101,14 +1143,18 @@ bool CSentimentAnalyzer::UpdateCOTData(string symbol)
 double CSentimentAnalyzer::AnalyzeInstitutionalFlow(string symbol)
 {
     //--- Analyze volume patterns for institutional activity
+    long volume_buf[];
+    ArraySetAsSeries(volume_buf, true);
+    CopyTickVolume(symbol, PERIOD_H1, 0, 21, volume_buf);
+    
     double avgVolume = 0;
     for(int i = 1; i <= 20; i++)
     {
-        avgVolume += iVolume(symbol, PERIOD_H1, i);
+        avgVolume += (double)volume_buf[i];
     }
     avgVolume = avgVolume / 20;
     
-    double currentVolume = iVolume(symbol, PERIOD_H1, 0);
+    double currentVolume = (double)volume_buf[0];
     double volumeRatio = currentVolume / avgVolume;
     
     //--- Large volume spikes suggest institutional activity
@@ -1117,7 +1163,13 @@ double CSentimentAnalyzer::AnalyzeInstitutionalFlow(string symbol)
     if(volumeRatio > 2.0)
     {
         //--- Check if price moved with volume (accumulation) or against (distribution)
-        double priceChange = (iClose(symbol, PERIOD_H1, 0) - iOpen(symbol, PERIOD_H1, 0)) / iOpen(symbol, PERIOD_H1, 0) * 100;
+        double close_buf[], open_buf[];
+        ArraySetAsSeries(close_buf, true);
+        ArraySetAsSeries(open_buf, true);
+        CopyClose(symbol, PERIOD_H1, 0, 1, close_buf);
+        CopyOpen(symbol, PERIOD_H1, 0, 1, open_buf);
+        
+        double priceChange = (close_buf[0] - open_buf[0]) / open_buf[0] * 100;
         
         if(priceChange > 0)
             institutionalScore += 25; // Institutional buying
@@ -1152,11 +1204,16 @@ double CSentimentAnalyzer::CalculateFearGreedIndex(string symbol)
     double fearGreed = 50.0; // Neutral baseline
     
     //--- Volatility component (VIX-like)
-    double atr = iATR(symbol, PERIOD_D1, 14, 0);
+    int atr_h = iATR(symbol, PERIOD_D1, 14);
+    double atr_buf[];
+    ArraySetAsSeries(atr_buf, true);
+    CopyBuffer(atr_h, 0, 0, 51, atr_buf);
+    
+    double atr = atr_buf[0];
     double avgATR = 0;
     for(int i = 1; i <= 50; i++)
     {
-        avgATR += iATR(symbol, PERIOD_D1, 14, i);
+        avgATR += atr_buf[i];
     }
     avgATR = avgATR / 50;
     
@@ -1168,7 +1225,11 @@ double CSentimentAnalyzer::CalculateFearGreedIndex(string symbol)
         fearGreed += 15; // Low volatility = complacency/greed
     
     //--- Momentum component
-    double rsi = iRSI(symbol, PERIOD_D1, 14, PRICE_CLOSE, 0);
+    int rsi_h = iRSI(symbol, PERIOD_D1, 14, PRICE_CLOSE);
+    double rsi_buf[];
+    ArraySetAsSeries(rsi_buf, true);
+    CopyBuffer(rsi_h, 0, 0, 1, rsi_buf);
+    double rsi = rsi_buf[0];
     if(rsi > 80)
         fearGreed += 20; // Extreme greed
     else if(rsi < 20)
@@ -1218,7 +1279,7 @@ double CSentimentAnalyzer::GetSentimentConfidence(string symbol)
     double confidence = 50.0;
     
     //--- Check alignment across different sentiment measures
-    double technical = m_technicalSentiment.bullishPercent;
+    double technical = AnalyzeTechnicalSentiment(symbol); // Use function call instead
     double fundamental = AnalyzeFundamentalSentiment(symbol);
     double positioning = m_sentiment.retailSentiment;
     double institutional = m_sentiment.institutionalFlow;
@@ -1370,13 +1431,12 @@ void CSentimentAnalyzer::PrintSentimentSummary(string symbol)
     Print("📊 SENTIMENT ANALYSIS - ", symbol);
     Print("═══════════════════════════════════════");
     Print("🎯 Overall Sentiment: ", DoubleToString(m_sentiment.overallSentiment, 1), "%");
-    Print("📈 Technical Bullish: ", DoubleToString(m_technicalSentiment.bullishPercent, 1), "%");
-    Print("📉 Technical Bearish: ", DoubleToString(m_technicalSentiment.bearishPercent, 1), "%");
+    Print("📈 Technical Bullish: ", DoubleToString(AnalyzeTechnicalSentiment(symbol), 1), "%");
+    Print("📉 Technical Bearish: ", DoubleToString(100.0 - AnalyzeTechnicalSentiment(symbol), 1), "%");
     Print("🏛️ Institutional Flow: ", DoubleToString(m_sentiment.institutionalFlow, 1), "%");
     Print("🏪 Retail Sentiment: ", DoubleToString(m_sentiment.retailSentiment, 1), "%");
     Print("😱 Fear & Greed: ", DoubleToString(m_sentiment.fearGreedIndex, 1), "%");
     Print("📰 News Consensus: ", DoubleToString(GetNewsConsensus(symbol), 1), "%");
-    Print("🐦 Social Emotion: ", m_socialSentiment.dominantEmotion);
     Print("⚖️ COT Sentiment: ", DoubleToString(m_sentiment.commitmentOfTraders, 1), "%");
     
     ENUM_ORDER_TYPE signal = GetSentimentSignal(symbol);
@@ -1388,3 +1448,16 @@ void CSentimentAnalyzer::PrintSentimentSummary(string symbol)
     Print("⚠️ Extremes: ", DetectSentimentExtremes(symbol) ? "YES" : "NO");
     Print("═══════════════════════════════════════");
 }
+
+//+------------------------------------------------------------------+
+//| Stub implementations for missing helper functions              |
+//+------------------------------------------------------------------+
+
+double CSentimentAnalyzer::AnalyzeGDPGrowthSentiment(string currency)
+{
+    return 50.0; // Neutral - stub implementation
+}
+
+//+------------------------------------------------------------------+
+//| End of CSentimentAnalyzer class implementation                  |
+//+------------------------------------------------------------------+

@@ -225,7 +225,7 @@ private:
     void InitializeDefaultStrategies();
     void InitializeMarketMappings();
     void UpdateStrategyWeights();
-    double CalculateWeightedScore(const double scores[], const double weights[], int count);
+    double CalculateWeightedScore(double &scores[], double &weights[], int count);
     
     //--- Strategy implementation helpers
     double CalculateTrendStrength(string symbol);
@@ -234,8 +234,8 @@ private:
     bool IsNewsImpactPeriod();
     
     //--- Performance calculation helpers
-    double CalculateSharpeRatio(const double returns[], int count);
-    double CalculateMaxDrawdown(const double equity[], int count);
+    double CalculateSharpeRatio(double &returns[], int count);
+    double CalculateMaxDrawdown(double &equity[], int count);
     double CalculateWinRate(ENUM_STRATEGY_TYPE strategy);
     double CalculateProfitFactor(ENUM_STRATEGY_TYPE strategy);
     

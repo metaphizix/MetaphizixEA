@@ -487,11 +487,19 @@ void CRiskAdjuster::UpdateMarketConditions(string symbol)
 //+------------------------------------------------------------------+
 double CRiskAdjuster::CalculateCurrentVolatility(string symbol)
 {
-    //--- Use ATR as volatility measure
-    double atr = iATR(symbol, PERIOD_H1, 24, 0); // 24-hour ATR
+    //--- Use ATR as volatility measure (handle-based)
+    int atrHandle = iATR(symbol, PERIOD_H1, 24);
+    if(atrHandle == INVALID_HANDLE) return 0.0;
+    
+    double atrBuffer[];
+    ArraySetAsSeries(atrBuffer, true);
+    if(CopyBuffer(atrHandle, 0, 0, 1, atrBuffer) <= 0) return 0.0;
+    
+    double atr = atrBuffer[0];
     double price = SymbolInfoDouble(symbol, SYMBOL_BID);
     
     //--- Convert to percentage volatility
+    if(price <= 0) return 0.0;
     double volatility = (atr / price) * 100;
     
     return volatility;
@@ -543,8 +551,24 @@ double CRiskAdjuster::GetAverageVolatility()
 string CRiskAdjuster::DetermineMarketRegime(string symbol)
 {
     double volatilityRatio = m_marketConditions.volatilityRatio;
-    double atr = iATR(symbol, PERIOD_D1, 14, 0);
-    double adx = iADX(symbol, PERIOD_D1, 14, PRICE_CLOSE, MODE_MAIN, 0);
+    
+    // Get ATR handle-based
+    int atrHandle = iATR(symbol, PERIOD_D1, 14);
+    if(atrHandle == INVALID_HANDLE) return "UNKNOWN";
+    
+    double atrBuffer[];
+    ArraySetAsSeries(atrBuffer, true);
+    if(CopyBuffer(atrHandle, 0, 0, 1, atrBuffer) <= 0) return "UNKNOWN";
+    double atr = atrBuffer[0];
+    
+    // Get ADX handle-based
+    int adxHandle = iADX(symbol, PERIOD_D1, 14);
+    if(adxHandle == INVALID_HANDLE) return "UNKNOWN";
+    
+    double adxBuffer[];
+    ArraySetAsSeries(adxBuffer, true);
+    if(CopyBuffer(adxHandle, 0, 0, 1, adxBuffer) <= 0) return "UNKNOWN";
+    double adx = adxBuffer[0];
     
     //--- Crisis conditions
     if(volatilityRatio > 3.0)
@@ -630,8 +654,8 @@ void CRiskAdjuster::UpdatePerformanceMetrics()
 //+------------------------------------------------------------------+
 double CRiskAdjuster::CalculateCurrentDrawdown()
 {
-    double currentEquity = AccountEquity();
-    double balance = AccountBalance();
+    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
     
     //--- Calculate drawdown as percentage of balance
     double drawdown = ((balance - currentEquity) / balance) * 100;
@@ -644,16 +668,18 @@ double CRiskAdjuster::CalculateCurrentDrawdown()
 //+------------------------------------------------------------------+
 double CRiskAdjuster::CalculateWinRate()
 {
-    int totalDeals = OrdersHistoryTotal();
+    int totalDeals = HistoryDealsTotal();
     if(totalDeals == 0) return 50.0; // Default
     
     int winningTrades = 0;
     
     for(int i = 0; i < totalDeals; i++)
     {
-        if(OrderSelect(i, SELECT_BY_POS, MODE_HISTORY))
+        ulong dealTicket = HistoryDealGetTicket(i);
+        if(dealTicket != 0)
         {
-            if(OrderProfit() > 0)
+            double dealProfit = HistoryDealGetDouble(dealTicket, DEAL_PROFIT);
+            if(dealProfit > 0)
                 winningTrades++;
         }
     }
@@ -794,3 +820,4 @@ void CRiskAdjuster::PrintRiskSummary()
     Print("⚠️ Status: ", GetRiskStatus());
     Print("═══════════════════════════════════════");
 }
+

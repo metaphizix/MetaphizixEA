@@ -184,7 +184,7 @@ public:
     ENUM_NEWS_SENTIMENT AnalyzeNewsSentiment(const SNewsEvent &newsEvent);
     
     //--- Currency and pair impact analysis
-    bool IsCurrencyAffected(const string currency);
+    bool IsCurrencyAffected(const string currency, const string symbol);
     bool IsPairAffected(const string symbol);
     double GetCurrencyNewsRisk(const string currency);
     double GetPairNewsRisk(const string symbol);
@@ -288,41 +288,6 @@ private:
     void LogFilterDecision(const string symbol, bool shouldAvoid, const string reason);
     void LogMarketReaction(const SMarketReaction &reaction);
     void LogStatistics();
-};
-    
-public:
-    //--- Constructor/Destructor
-    CNewsFilter();
-    ~CNewsFilter();
-    
-    //--- Initialization
-    bool Initialize(int impactThreshold = 3, int bufferMinutes = 30);
-    
-    //--- Main methods
-    bool IsHighImpactNewsUpcoming(string symbol);
-    bool IsNewsPeriod(string symbol);
-    bool ShouldAvoidTrading(string symbol);
-    
-    //--- News data management
-    bool LoadNewsEvents();
-    bool UpdateNewsData();
-    void ClearOldEvents();
-    
-    //--- Analysis methods
-    ENUM_NEWS_IMPACT GetUpcomingNewsImpact(string symbol);
-    datetime GetNextNewsTime(string symbol);
-    int GetNewsCountInPeriod(string symbol, int minutes);
-    
-    //--- Utility methods
-    string GetBaseCurrency(string symbol);
-    string GetQuoteCurrency(string symbol);
-    bool IsCurrencyAffected(string currency, string symbol);
-    
-    //--- Getters/Setters
-    void SetImpactThreshold(int threshold) { m_impactThreshold = threshold; }
-    void SetBufferMinutes(int minutes) { m_bufferMinutes = minutes; }
-    int GetImpactThreshold() { return m_impactThreshold; }
-    int GetBufferMinutes() { return m_bufferMinutes; }
     
 private:
     //--- Helper methods
@@ -330,6 +295,14 @@ private:
     SNewsEvent CreateNewsEvent(string currency, string title, datetime time, int impact);
     bool IsWithinBuffer(datetime newsTime);
     string ExtractCurrencyFromSymbol(string symbol, bool isBase);
+    bool IsHighImpactNewsUpcoming(string symbol);
+    bool IsNewsPeriod(string symbol);
+    bool LoadNewsEvents();
+    void ClearOldEvents();
+    ENUM_NEWS_IMPACT GetUpcomingNewsImpact(string symbol);
+    int GetNewsCountInPeriod(string symbol, int minutes);
+    string GetBaseCurrency(string symbol);
+    string GetQuoteCurrency(string symbol);
 };
 
 //+------------------------------------------------------------------+
@@ -337,8 +310,8 @@ private:
 //+------------------------------------------------------------------+
 CNewsFilter::CNewsFilter()
 {
-    m_impactThreshold = 3;
-    m_bufferMinutes = 30;
+    m_config.impactThreshold = 3;
+    m_config.bufferMinutesBefore = 30;
     m_lastUpdate = 0;
     ArrayResize(m_newsEvents, 0);
 }
@@ -356,14 +329,14 @@ CNewsFilter::~CNewsFilter()
 //+------------------------------------------------------------------+
 bool CNewsFilter::Initialize(int impactThreshold = 3, int bufferMinutes = 30)
 {
-    m_impactThreshold = impactThreshold;
-    m_bufferMinutes = bufferMinutes;
+    m_config.impactThreshold = impactThreshold;
+    m_config.bufferMinutesBefore = bufferMinutes;
     
     CConfig::LogInfo(StringFormat("News Filter initialized - Impact threshold: %d, Buffer: %d minutes", 
                      impactThreshold, bufferMinutes));
     
     // Load initial news data
-    return LoadNewsEvents();
+    return true; // Default to true until calendar API is implemented
 }
 
 //+------------------------------------------------------------------+
@@ -375,7 +348,7 @@ bool CNewsFilter::IsHighImpactNewsUpcoming(string symbol)
     UpdateNewsData();
     
     datetime currentTime = TimeCurrent();
-    datetime bufferTime = currentTime + (m_bufferMinutes * 60);
+    datetime bufferTime = currentTime + (m_config.bufferMinutesBefore * 60);
     
     string baseCurrency = GetBaseCurrency(symbol);
     string quoteCurrency = GetQuoteCurrency(symbol);
@@ -384,7 +357,7 @@ bool CNewsFilter::IsHighImpactNewsUpcoming(string symbol)
     {
         if(m_newsEvents[i].time >= currentTime && m_newsEvents[i].time <= bufferTime)
         {
-            if(m_newsEvents[i].impact >= m_impactThreshold)
+            if(m_newsEvents[i].impact >= m_config.impactThreshold)
             {
                 if(IsCurrencyAffected(m_newsEvents[i].currency, symbol))
                 {
@@ -405,14 +378,14 @@ bool CNewsFilter::IsHighImpactNewsUpcoming(string symbol)
 bool CNewsFilter::IsNewsPeriod(string symbol)
 {
     datetime currentTime = TimeCurrent();
-    datetime bufferBefore = currentTime - (m_bufferMinutes * 60);
-    datetime bufferAfter = currentTime + (m_bufferMinutes * 60);
+    datetime bufferBefore = currentTime - (m_config.bufferMinutesBefore * 60);
+    datetime bufferAfter = currentTime + (m_config.bufferMinutesBefore * 60);
     
     for(int i = 0; i < ArraySize(m_newsEvents); i++)
     {
         if(m_newsEvents[i].time >= bufferBefore && m_newsEvents[i].time <= bufferAfter)
         {
-            if(m_newsEvents[i].impact >= m_impactThreshold)
+            if(m_newsEvents[i].impact >= m_config.impactThreshold)
             {
                 if(IsCurrencyAffected(m_newsEvents[i].currency, symbol))
                 {
@@ -504,7 +477,7 @@ void CNewsFilter::ClearOldEvents()
 ENUM_NEWS_IMPACT CNewsFilter::GetUpcomingNewsImpact(string symbol)
 {
     datetime currentTime = TimeCurrent();
-    datetime bufferTime = currentTime + (m_bufferMinutes * 60);
+    datetime bufferTime = currentTime + (m_config.bufferMinutesBefore * 60);
     
     ENUM_NEWS_IMPACT maxImpact = NEWS_IMPACT_LOW;
     
@@ -562,7 +535,7 @@ int CNewsFilter::GetNewsCountInPeriod(string symbol, int minutes)
         {
             if(IsCurrencyAffected(m_newsEvents[i].currency, symbol))
             {
-                if(m_newsEvents[i].impact >= m_impactThreshold)
+                if(m_newsEvents[i].impact >= m_config.impactThreshold)
                     count++;
             }
         }
@@ -590,7 +563,7 @@ string CNewsFilter::GetQuoteCurrency(string symbol)
 //+------------------------------------------------------------------+
 //| Check if currency is affected                                   |
 //+------------------------------------------------------------------+
-bool CNewsFilter::IsCurrencyAffected(string currency, string symbol)
+bool CNewsFilter::IsCurrencyAffected(const string currency, const string symbol)
 {
     string baseCurrency = GetBaseCurrency(symbol);
     string quoteCurrency = GetQuoteCurrency(symbol);
@@ -623,7 +596,7 @@ bool CNewsFilter::IsWithinBuffer(datetime newsTime)
     datetime currentTime = TimeCurrent();
     int timeDiff = (int)MathAbs(newsTime - currentTime) / 60; // in minutes
     
-    return timeDiff <= m_bufferMinutes;
+    return timeDiff <= m_config.bufferMinutesBefore;
 }
 
 //+------------------------------------------------------------------+

@@ -100,7 +100,7 @@ struct SDecisionMetrics
     string decisionReasoning;
 };
 
-struct SPerformanceMetrics
+struct SAdaptivePerformanceMetrics  // Renamed to avoid conflict with Config.mqh
 {
     double accuracyByMode[10];       // Accuracy per decision mode
     double profitabilityByState[10]; // Profitability per market state
@@ -122,7 +122,7 @@ private:
     SAdaptiveConfig m_config;
     SMarketProfile m_marketProfile;
     SDecisionMetrics m_lastDecision;
-    SPerformanceMetrics m_performance;
+    SAdaptivePerformanceMetrics m_performance;
     
     // Market analysis components
     CTechnicalIndicators* m_indicators;
@@ -269,7 +269,7 @@ public:
     //--- Information and Diagnostics
     SMarketProfile GetCurrentMarketProfile() { return m_marketProfile; }
     SDecisionMetrics GetLastDecisionMetrics() { return m_lastDecision; }
-    SPerformanceMetrics GetPerformanceMetrics() { return m_performance; }
+    SAdaptivePerformanceMetrics GetPerformanceMetrics() { return m_performance; }
     ENUM_DECISION_MODE GetCurrentMode() { return m_config.primaryMode; }
     double GetAdaptationConfidence() { return m_config.modeConfidence; }
     
@@ -300,7 +300,7 @@ private:
     
     //--- Learning system helpers
     void UpdateExperienceBuffer(double reward);
-    double CalculateMovingAverage(const double array[], int period);
+    double CalculateMovingAverage(double &array[], int period);
     void NormalizePerformanceMetrics();
     void UpdateLearningParameters();
     

@@ -76,7 +76,7 @@ private:
         string liquidityProvider; // Banks, Prime Brokers, Internal
         double trustScore;        // 0-100 rating
         bool hasRegulation;
-        string[] regulators;
+        string regulators;        // Comma-separated list of regulators
         bool hasNegativeBalance;
         bool hasGuaranteedStops;
         bool hasVariableSpreads;

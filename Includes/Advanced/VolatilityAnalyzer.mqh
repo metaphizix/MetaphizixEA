@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "../Core/Config.mqh"
 
 //+------------------------------------------------------------------+
 //| Volatility analysis enumerations                                |
@@ -95,7 +95,7 @@ private:
     string m_trackedSymbols[];
     
     // Historical volatility data
-    double m_volatilityHistory[][]; // [symbol_index][time_index]
+    double m_volatilityHistory[]; // Flattened array instead of 2D
     datetime m_timeHistory[];
     
     // Volatility breakout detection
@@ -108,7 +108,7 @@ private:
     
     // Regime detection
     double m_regimeThresholds[];
-    int m_regimeHistory[][]; // Historical regime data
+    int m_regimeHistory[]; // Historical regime data (flattened)
     
 public:
     //--- Constructor/Destructor
@@ -163,8 +163,8 @@ public:
     
     //--- Correlation and cross-asset volatility
     double CalculateVolatilityCorrelation(const string symbol1, const string symbol2);
-    bool IsVolatilitySpillover(const string symbols[]);
-    double GetPortfolioVolatility(const string symbols[], const double weights[]);
+    bool IsVolatilitySpillover(string &symbols[]);
+    double GetPortfolioVolatility(string &symbols[], double &weights[]);
     
     //--- Volatility forecasting
     double ForecastVolatility(const string symbol, int periodsAhead = 1);
@@ -204,14 +204,14 @@ private:
     void ShiftHistoryArrays();
     
     //--- Statistical functions
-    double CalculatePercentile(const double data[], double percentile);
-    double CalculateMovingAverage(const double data[], int period);
-    double CalculateStandardDeviation(const double data[], int period);
+    double CalculatePercentile(double &data[], double percentile);
+    double CalculateMovingAverage(double &data[], int period);
+    double CalculateStandardDeviation(double &data[], int period);
     
     //--- GARCH implementation helpers
     void InitializeGARCHParameters();
     double CalculateGARCHVariance(const string symbol, double previousVariance, double previousReturn);
-    void EstimateGARCHParameters(const string symbol, const double returns[]);
+    void EstimateGARCHParameters(const string symbol, double &returns[]);
     
     //--- Regime detection helpers
     void UpdateRegimeHistory(const string symbol, ENUM_VOLATILITY_REGIME regime);

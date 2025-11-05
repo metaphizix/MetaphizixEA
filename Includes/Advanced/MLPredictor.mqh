@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "../Core/Config.mqh"
 
 //+------------------------------------------------------------------+
 //| Machine Learning enumerations                                   |
@@ -106,7 +106,7 @@ struct SMLModelPerformance
 
 struct STrainingData
 {
-    double features[][];         // Feature matrix [sample][feature]
+    double features[];           // Feature array (flattened from matrix)
     double targets[];            // Target values
     datetime timestamps[];       // Time stamps for each sample
     int sampleCount;
@@ -141,7 +141,7 @@ private:
     
     // Training data management
     STrainingData m_trainingData;
-    double m_validationData[][];
+    double m_validationData[];   // Flattened validation data
     double m_validationTargets[];
     
     // Online learning
@@ -161,7 +161,7 @@ public:
     //--- Initialization and configuration
     bool Initialize(const SMLConfig &config);
     bool LoadModel(const string modelPath, ENUM_ML_MODEL_TYPE modelType);
-    bool LoadEnsembleModels(const string modelPaths[]);
+    bool LoadEnsembleModels(string &modelPaths[]);
     void SetConfiguration(const SMLConfig &config);
     
     //--- Feature engineering
@@ -180,12 +180,12 @@ public:
     
     //--- Ensemble predictions
     SMLPrediction GetEnsemblePrediction(const string symbol, ENUM_PREDICTION_TYPE type);
-    double CalculateEnsembleConfidence(const SMLPrediction predictions[]);
+    double CalculateEnsembleConfidence(SMLPrediction &predictions[]);
     void OptimizeEnsembleWeights();
     
     //--- Model training and updates
     bool TrainModel(const string symbol, int trainingPeriod);
-    bool UpdateModelOnline(const string symbol, const SMLFeature features[], double target);
+    bool UpdateModelOnline(const string symbol, SMLFeature &features[], double target);
     bool RetrainPeriodically();
     bool ValidateModel(const string symbol);
     
@@ -263,20 +263,20 @@ private:
     void ScaleFeatures(SMLFeature &features[], double minVal = -1.0, double maxVal = 1.0);
     
     //--- Model inference (simplified - would interface with actual ML libraries)
-    double InferenceLinearModel(const SMLFeature features[]);
-    double InferenceNeuralNetwork(const SMLFeature features[]);
-    double InferenceRandomForest(const SMLFeature features[]);
-    double InferenceEnsemble(const SMLFeature features[]);
+    double InferenceLinearModel(SMLFeature &features[]);
+    double InferenceNeuralNetwork(SMLFeature &features[]);
+    double InferenceRandomForest(SMLFeature &features[]);
+    double InferenceEnsemble(SMLFeature &features[]);
     
     //--- Training helpers
-    void UpdateModelWeights(const SMLFeature features[], double target, double learningRate);
+    void UpdateModelWeights(SMLFeature &features[], double target, double learningRate);
     void BackpropagateError(double error);
-    void UpdateFeatureImportance(const SMLFeature features[], double target);
+    void UpdateFeatureImportance(SMLFeature &features[], double target);
     
     //--- Performance calculation helpers
-    void CalculateConfusionMatrix(const double predictions[], const double targets[], int size);
-    double CalculateROCAUC(const double predictions[], const double targets[], int size);
-    double CalculateMeanSquaredError(const double predictions[], const double targets[], int size);
+    void CalculateConfusionMatrix(double &predictions[], double &targets[], int size);
+    double CalculateROCAUC(double &predictions[], double &targets[], int size);
+    double CalculateMeanSquaredError(double &predictions[], double &targets[], int size);
     
     //--- Array management
     void AddPredictionToHistory(const SMLPrediction &prediction);
@@ -284,7 +284,7 @@ private:
     void ResizeTrainingArrays(int sampleCount, int featureCount);
     
     //--- Validation and diagnostics
-    bool ValidateFeatures(const SMLFeature features[]);
+    bool ValidateFeatures(SMLFeature &features[]);
     void LogPrediction(const SMLPrediction &prediction);
     void LogModelPerformance(const SMLModelPerformance &performance);
     void LogFeatureImportance();

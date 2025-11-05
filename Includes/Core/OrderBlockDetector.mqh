@@ -9,6 +9,12 @@
 #include "Config.mqh"
 
 //+------------------------------------------------------------------+
+//| Forward declarations                                             |
+//+------------------------------------------------------------------+
+class CMLPredictor;
+class CVolatilityAnalyzer;
+
+//+------------------------------------------------------------------+
 //| Enhanced Order block enumerations                               |
 //+------------------------------------------------------------------+
 enum ENUM_ORDER_BLOCK_TYPE
@@ -159,9 +165,9 @@ private:
     datetime                m_lastAnalysis[];
     datetime                m_lastUpdate[];
     
-    // Pattern recognition
-    ENUM_PATTERN_TYPE       m_detectedPatterns[][];
-    double                  m_patternScores[][];
+    // Pattern recognition - using single dimensional arrays instead of 2D
+    ENUM_PATTERN_TYPE       m_detectedPatterns[];
+    double                  m_patternScores[];
     
     // AI enhancement
     bool                    m_aiEnabled;
@@ -200,11 +206,13 @@ public:
     bool DetectDoji(const string symbol, int index);
     
     //--- Order block validation and scoring
-    bool ValidateOrderBlock(SOrderBlock &orderBlock);
-    double CalculateOrderBlockStrength(const SOrderBlock &orderBlock);
+    bool ValidateOrderBlock(string symbol, const SOrderBlock &orderBlock);
+    double CalculateOrderBlockStrength(string symbol, const SOrderBlock &orderBlock);
     double CalculateConfluenceScore(const SOrderBlock &orderBlock);
     ENUM_ORDER_BLOCK_STRENGTH DetermineStrengthLevel(double strengthScore);
     bool IsOrderBlockValid(const SOrderBlock &orderBlock);
+    bool IsOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    bool IsOrderBlockConfirmed(string symbol, const SOrderBlock &block);
     
     //--- Market structure analysis
     bool IdentifyMarketStructure(const string symbol);
@@ -281,12 +289,17 @@ private:
     bool HasSufficientVolume(const SOrderBlock &orderBlock);
     bool PassesQualityFilter(const SOrderBlock &orderBlock);
     bool IsWithinTimeframe(const SOrderBlock &orderBlock);
+    bool IsBullishOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    bool IsBearishOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    bool IsBreakOfStructure(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
+    bool IsLiquidityZone(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
     
     //--- Calculation helpers
     double CalculateBlockHeight(const SOrderBlock &orderBlock);
     double CalculateVolumeRatio(const string symbol, int index);
     double CalculateMomentumScore(const string symbol, int index);
     double CalculateRelativePosition(const SOrderBlock &orderBlock, double currentPrice);
+    double GetATR(string symbol, ENUM_TIMEFRAMES timeframe, int period = 14);
     
     //--- Pattern analysis helpers
     bool IsBearishEngulfing(const string symbol, int index);
@@ -303,7 +316,12 @@ private:
     
     //--- Array management
     void AddOrderBlock(const SOrderBlock &orderBlock);
+    void UpdateOrderBlock(int index, const SOrderBlock &block);
+    void UpdateOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int index);
     void RemoveOrderBlock(int index);
+    void RemoveOldOrderBlocks(string symbol);
+    void RemoveOldOrderBlocks(string symbol, int maxAge);
+    void ClearOrderBlocks(string symbol = "");
     int FindOrderBlockIndex(const string symbol, datetime time);
     void CleanupOldBlocks();
     void SortBlocksByStrength(SOrderBlock &blocks[]);
@@ -323,34 +341,6 @@ private:
     void LogMarketStructureUpdate(const string symbol);
     void LogStatistics();
     void LogPerformanceMetrics();
-};
-    bool GetOrderBlocks(string symbol, SOrderBlock &blocks[]);
-    bool GetLatestOrderBlock(string symbol, SOrderBlock &block);
-    
-    //--- Utility functions
-    void ClearOrderBlocks(string symbol = "");
-    int GetOrderBlockCount(string symbol = "");
-    
-private:
-    //--- Order block detection methods
-    bool DetectOrderBlocks(string symbol, ENUM_TIMEFRAMES timeframe);
-    bool IsOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
-    bool ValidateOrderBlock(string symbol, const SOrderBlock &block);
-    double CalculateOrderBlockStrength(string symbol, const SOrderBlock &block);
-    bool IsOrderBlockConfirmed(string symbol, const SOrderBlock &block);
-    
-    //--- Helper functions
-    bool IsBreakOfStructure(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
-    bool IsLiquidityZone(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
-    double GetATR(string symbol, ENUM_TIMEFRAMES timeframe, int period = 14);
-    bool IsBullishOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
-    bool IsBearishOrderBlock(string symbol, ENUM_TIMEFRAMES timeframe, int shift);
-    
-    //--- Array management
-    int FindOrderBlockIndex(string symbol, datetime time);
-    void AddOrderBlock(const SOrderBlock &block);
-    void UpdateOrderBlock(int index, const SOrderBlock &block);
-    void RemoveOldOrderBlocks(string symbol);
 };
 
 //+------------------------------------------------------------------+
@@ -463,7 +453,7 @@ bool COrderBlockDetector::HasNewOrderBlock(string symbol)
     for(int i = 0; i < ArraySize(m_orderBlocks); i++)
     {
         if(m_orderBlocks[i].symbol == symbol && 
-           currentTime - m_orderBlocks[i].time < 300) // New within 5 minutes
+           currentTime - m_orderBlocks[i].formation_time < 300) // New within 5 minutes
         {
             return true;
         }
@@ -501,9 +491,9 @@ bool COrderBlockDetector::GetLatestOrderBlock(string symbol, SOrderBlock &block)
     
     for(int i = 0; i < ArraySize(m_orderBlocks); i++)
     {
-        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].time > latestTime)
+        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].formation_time > latestTime)
         {
-            latestTime = m_orderBlocks[i].time;
+            latestTime = m_orderBlocks[i].formation_time;
             block = m_orderBlocks[i];
             found = true;
         }
@@ -527,13 +517,13 @@ bool COrderBlockDetector::DetectOrderBlocks(string symbol, ENUM_TIMEFRAMES timef
         {
             SOrderBlock block;
             block.symbol = symbol;
-            block.time = iTime(symbol, timeframe, i);
+            block.formation_time = iTime(symbol, timeframe, i);
             block.high = iHigh(symbol, timeframe, i);
             block.low = iLow(symbol, timeframe, i);
             block.open = iOpen(symbol, timeframe, i);
             block.close = iClose(symbol, timeframe, i);
             block.timeframe = timeframe;
-            block.is_bullish = IsBullishOrderBlock(symbol, timeframe, i);
+            block.type = IsBullishOrderBlock(symbol, timeframe, i) ? OB_TYPE_BULLISH : OB_TYPE_BEARISH;
             block.is_confirmed = IsOrderBlockConfirmed(symbol, block);
             block.strength = CalculateOrderBlockStrength(symbol, block);
             block.touch_count = 0;
@@ -543,7 +533,7 @@ bool COrderBlockDetector::DetectOrderBlocks(string symbol, ENUM_TIMEFRAMES timef
             if(ValidateOrderBlock(symbol, block))
             {
                 //--- Check if this order block already exists
-                int existingIndex = FindOrderBlockIndex(symbol, block.time);
+                int existingIndex = FindOrderBlockIndex(symbol, block.formation_time);
                 if(existingIndex >= 0)
                 {
                     UpdateOrderBlock(existingIndex, block);
@@ -631,7 +621,7 @@ double COrderBlockDetector::CalculateOrderBlockStrength(string symbol, const SOr
     }
     
     //--- Time factor (fresher blocks are stronger)
-    double hoursSince = (double)(TimeCurrent() - block.time) / 3600.0;
+    double hoursSince = (double)(TimeCurrent() - block.formation_time) / 3600.0;
     if(hoursSince < 24)
         strength += 0.3;
     else if(hoursSince < 168) // 1 week
@@ -650,14 +640,16 @@ bool COrderBlockDetector::IsOrderBlockConfirmed(string symbol, const SOrderBlock
     //--- Check if price has moved away from the order block
     double currentPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
     
-    if(block.is_bullish)
+    if(block.type == OB_TYPE_BULLISH)
     {
         return currentPrice > block.high;
     }
-    else
+    else if(block.type == OB_TYPE_BEARISH)
     {
         return currentPrice < block.low;
     }
+    
+    return false;
 }
 
 //+------------------------------------------------------------------+
@@ -746,7 +738,7 @@ int COrderBlockDetector::FindOrderBlockIndex(string symbol, datetime time)
 {
     for(int i = 0; i < ArraySize(m_orderBlocks); i++)
     {
-        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].time == time)
+        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].formation_time == time)
             return i;
     }
     return -1;
@@ -779,7 +771,7 @@ void COrderBlockDetector::RemoveOldOrderBlocks(string symbol)
     
     for(int i = ArraySize(m_orderBlocks) - 1; i >= 0; i--)
     {
-        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].time < cutoffTime)
+        if(m_orderBlocks[i].symbol == symbol && m_orderBlocks[i].formation_time < cutoffTime)
         {
             ArrayRemove(m_orderBlocks, i, 1);
         }
@@ -824,3 +816,7 @@ int COrderBlockDetector::GetOrderBlockCount(string symbol = "")
     
     return count;
 }
+
+//+------------------------------------------------------------------+
+//| End of COrderBlockDetector class implementation                 |
+//+------------------------------------------------------------------+

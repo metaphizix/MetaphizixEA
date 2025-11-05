@@ -112,14 +112,22 @@ bool CPairManager::Initialize()
     //--- Clear existing data
     ClearAnalysis();
     
-    //--- Get trading pairs from config
+    //--- Get trading pairs from config and initialize pairs array
     string pairs[];
+    int maxPairs = CConfig::GetMaxConcurrentPairs();
+    if(maxPairs <= 0)
+    {
+        CConfig::LogError("Invalid max pairs value: " + IntegerToString(maxPairs));
+        return false;
+    }
+    
+    ArrayResize(pairs, maxPairs);
     CConfig::GetTradingPairs(pairs);
     
     //--- Initialize analysis for each pair
     for(int i = 0; i < ArraySize(pairs); i++)
     {
-        if(CConfig::IsValidSymbol(pairs[i]))
+        if(StringLen(pairs[i]) > 0 && CConfig::IsValidSymbol(pairs[i]))
         {
             SPairAnalysis analysis;
             analysis.symbol = pairs[i];
@@ -226,8 +234,28 @@ bool CPairManager::AnalyzePair(string symbol)
 //+------------------------------------------------------------------+
 bool CPairManager::GetBestPairs(string &pairs[])
 {
-    ArrayCopy(pairs, m_activePairs);
-    return ArraySize(pairs) > 0;
+    // Get the max pairs from config
+    int maxPairs = CConfig::GetMaxConcurrentPairs();
+    if(maxPairs <= 0)
+    {
+        CConfig::LogError("Invalid max pairs value in GetBestPairs: " + IntegerToString(maxPairs));
+        return false;
+    }
+    
+    // Ensure pairs array is sized properly
+    if(ArraySize(pairs) < maxPairs)
+        ArrayResize(pairs, maxPairs);
+    
+    // Initialize array with empty strings
+    for(int i = 0; i < maxPairs; i++)
+        pairs[i] = "";
+        
+    // Copy active pairs up to max limit
+    int activePairsCount = MathMin(ArraySize(m_activePairs), maxPairs);
+    for(int i = 0; i < activePairsCount; i++)
+        pairs[i] = m_activePairs[i];
+        
+    return activePairsCount > 0;
 }
 
 //+------------------------------------------------------------------+

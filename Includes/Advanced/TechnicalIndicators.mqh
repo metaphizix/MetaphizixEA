@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "../Core/Config.mqh"
 
 //+------------------------------------------------------------------+
 //| Enhanced Technical Indicators Class                             |
@@ -358,10 +358,10 @@ public:
     bool AreIndicatorsAligned(string symbol, ENUM_TIMEFRAMES tf, double threshold = 70.0);
     
     //--- Utility functions
-    bool IsIndicatorDivergence(const double indicatorArray[], const double priceArray[], int period);
+    bool IsIndicatorDivergence(double &indicatorArray[], double &priceArray[], int period);
     double NormalizeIndicatorValue(double value, double min, double max);
     bool IsIndicatorCrossover(double current, double previous, double level);
-    double CalculateIndicatorSlope(const double array[], int period, int shift = 0);
+    double CalculateIndicatorSlope(double &array[], int period, int shift = 0);
     
     //--- Information functions
     string GetIndicatorStatus(ENUM_ENHANCED_INDICATOR_TYPE indicator, string symbol, ENUM_TIMEFRAMES tf);
@@ -374,9 +374,9 @@ private:
     void ClearBuffers();
     double CalculateTypicalPrice(string symbol, ENUM_TIMEFRAMES tf, int shift);
     double CalculateTrueRange(string symbol, ENUM_TIMEFRAMES tf, int shift);
-    double CalculateEMA(const double array[], int period, int index);
-    double CalculateSMA(const double array[], int period, int index);
-    double CalculateStandardDeviation(const double array[], int period, int index);
+    double CalculateEMA(double &array[], int period, int index);
+    double CalculateSMA(double &array[], int period, int index);
+    double CalculateStandardDeviation(double &array[], int period, int index);
     
     //--- Volume calculations
     long GetRealVolume(string symbol, ENUM_TIMEFRAMES tf, int shift);
@@ -384,13 +384,13 @@ private:
     bool IsVolumeReliable(string symbol);
     
     //--- Mathematical helpers
-    double CalculateSlope(const double array[], int period, int shift);
-    double CalculateCorrelation(const double array1[], const double array2[], int period);
-    double CalculateLinearRegression(const double array[], int period, int shift);
+    double CalculateSlope(double &array[], int period, int shift);
+    double CalculateCorrelation(double &array1[], double &array2[], int period);
+    double CalculateLinearRegression(double &array[], int period, int shift);
     
     //--- Validation helpers
     bool ValidatePriceData(string symbol, ENUM_TIMEFRAMES tf, int period);
-    bool ValidateIndicatorData(const double array[], int size);
+    bool ValidateIndicatorData(double &array[], int size);
     void HandleMissingData(double &array[], int size);
 };
 
@@ -411,8 +411,8 @@ public:
     static double OptimizeIndicatorParameters(ENUM_ENHANCED_INDICATOR_TYPE type, string symbol, ENUM_TIMEFRAMES tf);
     
     //--- Indicator combinations
-    static double CalculateIndicatorComposite(ENUM_ENHANCED_INDICATOR_TYPE indicators[], double weights[], int count, string symbol, ENUM_TIMEFRAMES tf);
-    static bool TestIndicatorCombination(ENUM_ENHANCED_INDICATOR_TYPE indicators[], int count, string symbol, ENUM_TIMEFRAMES tf);
+    static double CalculateIndicatorComposite(ENUM_ENHANCED_INDICATOR_TYPE &indicators[], double &weights[], int count, string symbol, ENUM_TIMEFRAMES tf);
+    static bool TestIndicatorCombination(ENUM_ENHANCED_INDICATOR_TYPE &indicators[], int count, string symbol, ENUM_TIMEFRAMES tf);
     
     //--- Performance analysis
     static double CalculateIndicatorAccuracy(ENUM_ENHANCED_INDICATOR_TYPE type, string symbol, ENUM_TIMEFRAMES tf, int testPeriod = 100);

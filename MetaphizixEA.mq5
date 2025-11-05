@@ -11,10 +11,15 @@
 //+------------------------------------------------------------------+
 //| CORE MODULE INCLUDES                                             |
 //+------------------------------------------------------------------+
+// First include Config.mqh as it defines core types used by other modules
 #include "Includes/Core/Config.mqh"
+
+// Next include the signal manager as it's required by several other modules
+#include "Includes/Core/SignalManager.mqh"
+
+// Then include other core modules
 #include "Includes/Core/OrderBlockDetector.mqh"
 #include "Includes/Core/PairManager.mqh"
-#include "Includes/Core/SignalManager.mqh"
 #include "Includes/Core/DisplayManager.mqh"
 #include "Includes/Core/RiskManagement.mqh"
 #include "Includes/Core/TradeExecution.mqh"
@@ -57,6 +62,13 @@
 input group "=== 📊 TRADING PAIRS CONFIGURATION ==="
 input string InpTradingPairs = "EURUSD,GBPUSD,USDJPY,USDCHF,AUDUSD,USDCAD,NZDUSD,EURJPY,GBPJPY,EURGBP"; // Trading Pairs (comma separated)
 input int InpMaxConcurrentPairs = 3; // Maximum concurrent pairs to analyze
+
+//+------------------------------------------------------------------+
+//| Global Variables                                               |
+//+------------------------------------------------------------------+
+// Array to store best trading pairs 
+string g_bestPairs[];  // Array to store best trading pairs
+int g_maxPairs = 10;   // Maximum number of pairs to track
 
 //--- Order Block Detection Settings
 input group "=== 🎯 ORDER BLOCK DETECTION ==="
@@ -237,6 +249,22 @@ struct SignalInfo
     string               reason;
 };
 
+//+------------------------------------------------------------------+
+//| Exit reason enumeration                                          |
+//+------------------------------------------------------------------+
+enum ENUM_EXIT_REASON
+{
+    EXIT_NONE = 0,
+    EXIT_TAKE_PROFIT,
+    EXIT_STOP_LOSS,
+    EXIT_TRAILING_STOP,
+    EXIT_BREAK_EVEN,
+    EXIT_PARTIAL_CLOSE,
+    EXIT_MANUAL,
+    EXIT_TIME_BASED,
+    EXIT_RISK_MANAGEMENT
+};
+
 struct TradeRequest
 {
     string               symbol;
@@ -296,22 +324,6 @@ SActiveTradeInfo        g_activeTrades[];
 datetime                g_lastTradeSettingsUpdate = 0;
 
 //+------------------------------------------------------------------+
-//| Exit reason enumeration                                          |
-//+------------------------------------------------------------------+
-enum ENUM_EXIT_REASON
-{
-    EXIT_NONE = 0,
-    EXIT_TAKE_PROFIT,
-    EXIT_STOP_LOSS,
-    EXIT_TRAILING_STOP,
-    EXIT_BREAK_EVEN,
-    EXIT_PARTIAL_CLOSE,
-    EXIT_MANUAL,
-    EXIT_TIME_BASED,
-    EXIT_RISK_MANAGEMENT
-};
-
-//+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
@@ -319,6 +331,16 @@ enum ENUM_EXIT_REASON
 //+------------------------------------------------------------------+
 int OnInit()
 {
+    //--- Initialize arrays before creating components
+    if(g_maxPairs <= 0)
+    {
+        Print("❌ ERROR: Invalid maxPairs value");
+        return(INIT_PARAMETERS_INCORRECT);
+    }
+    ArrayResize(g_bestPairs, g_maxPairs);
+    for(int i = 0; i < g_maxPairs; i++)
+        g_bestPairs[i] = "";
+
     //--- Display welcome message and system info
     if(InpShowWelcomeMessage)
     {
@@ -394,230 +416,6 @@ int OnInit()
     Print("✅ MetaphizixEA initialization completed successfully!");
     Print("🚀 System ready for operation");
     Alert("✅ MetaphizixEA: Successfully initialized and ready for trading!");
-    
-    return(INIT_SUCCEEDED);
-}
-    
-    Print("🔧 Configuration initialized successfully");
-    Print("💼 Trading pairs configured: ", InpTradingPairs);
-    
-    //--- Create and initialize components
-    g_orderBlockDetector = new COrderBlockDetector();
-    g_pairManager = new CPairManager();
-    g_signalManager = new CSignalManager();
-    g_displayManager = new CDisplayManager();
-    g_riskManager = new CRiskManagement();
-    g_tradeExecutor = new CTradeExecution();
-    g_newsFilter = new CNewsFilter();
-    g_sessionFilter = new CSessionFilter();
-    g_exitStrategy = new CExitStrategy();
-    
-    //--- Create advanced analysis modules
-    if(InpEnableForexAnalysis) g_forexAnalyzer = new CForexAnalyzer();
-    if(InpEnableVolatilityAnalysis) g_volatilityAnalyzer = new CVolatilityAnalyzer();
-    if(InpEnableCorrelationAnalysis) g_correlationAnalyzer = new CCorrelationAnalyzer();
-    if(InpEnableMLPrediction) g_mlPredictor = new CMLPredictor();
-    
-    //--- Create comprehensive analyzer modules
-    g_fibonacci = new CFibonacci();
-    g_marketAnalysis = new CMarketAnalysis();
-    g_portfolioManager = new CPortfolioManager();
-    g_sentimentAnalyzer = new CSentimentAnalyzer();
-    g_riskAdjuster = new CRiskAdjuster();
-    g_multiTimeframeAnalyzer = new CMultiTimeframeAnalyzer();
-    g_seasonalityAnalyzer = new CSeasonalityAnalyzer();
-    g_orderFlowAnalyzer = new COrderFlowAnalyzer();
-    g_currencyStrengthAnalyzer = new CCurrencyStrengthAnalyzer();
-    
-    //--- Create dynamic optimization modules
-    if(InpEnableAdaptiveDecisions) g_adaptiveEngine = new CAdaptiveDecisionEngine();
-    if(InpEnableDynamicStrategy) g_strategyManager = new CDynamicStrategyManager();
-    if(InpEnableRealtimeOptimization) g_realtimeOptimizer = new CRealtimeOptimizer();
-    
-    //--- Create spread manipulation detector
-    if(InpEnableSpreadDetection) g_spreadDetector = new CSpreadManipulationDetector();
-    
-    //--- Create broker and leverage detector
-    if(InpEnableBrokerDetection) g_brokerDetector = new CBrokerLeverageDetector();
-    
-    if(!g_orderBlockDetector || !g_pairManager || !g_signalManager || !g_displayManager ||
-       !g_riskManager || !g_tradeExecutor || !g_newsFilter || !g_sessionFilter || !g_exitStrategy)
-    {
-        Alert("❌ MetaphizixEA: Critical error - Failed to create core components!");
-        Print("❌ ERROR: Failed to create component objects");
-        CleanupObjects();
-        return(INIT_FAILED);
-    }
-    
-    Print("🏗️  Core components created successfully");
-    
-    //--- Initialize components
-    bool initSuccess = g_orderBlockDetector.Initialize() &&
-                      g_pairManager.Initialize() &&
-                      g_signalManager.Initialize() &&
-                      g_displayManager.Initialize(InpShowEntryPoints, InpShowExitPoints, 
-                                                InpBullishEntryColor, InpBearishEntryColor, InpExitColor) &&
-                      g_riskManager.Initialize(InpAccountRiskPercent, InpMaxOpenTrades, InpCorrelationThreshold) &&
-                      g_tradeExecutor.Initialize(InpMagicNumber, "MetaphizixEA") &&
-                      g_newsFilter.Initialize(InpNewsImpactThreshold) &&
-                      g_sessionFilter.Initialize(InpSessionStartHour, InpSessionEndHour) &&
-                      g_exitStrategy.Initialize(InpATRMultiplier, InpBreakEvenBuffer, InpPartialExitRR);
-    
-    //--- Initialize advanced modules if enabled
-    if(g_forexAnalyzer != NULL) initSuccess = initSuccess && g_forexAnalyzer.Initialize();
-    if(g_volatilityAnalyzer != NULL) initSuccess = initSuccess && g_volatilityAnalyzer.Initialize();
-    if(g_correlationAnalyzer != NULL) initSuccess = initSuccess && g_correlationAnalyzer.Initialize();
-    if(g_mlPredictor != NULL) initSuccess = initSuccess && g_mlPredictor.Initialize();
-    
-    //--- Initialize dynamic optimization modules
-    if(g_adaptiveEngine != NULL) 
-    {
-        initSuccess = initSuccess && g_adaptiveEngine.Initialize(NULL, g_mlPredictor, g_sentimentAnalyzer);
-        if(initSuccess)
-        {
-            SAdaptiveConfig config;
-            config.primaryMode = InpInitialDecisionMode;
-            config.adaptationSpeed = InpAdaptationSpeed;
-            config.enableMLAdaptation = InpEnableMLDrivenDecisions;
-            config.enableSentimentAdaptation = true;
-            config.enableVolatilityAdaptation = true;
-            config.adaptationPeriod = InpOptimizationFrequency;
-            g_adaptiveEngine.SetAdaptiveConfig(config);
-        }
-    }
-    
-    if(g_strategyManager != NULL) 
-    {
-        initSuccess = initSuccess && g_strategyManager.Initialize(g_adaptiveEngine);
-        if(initSuccess && InpEnableEnsembleMode)
-        {
-            g_strategyManager.EnableEnsembleMode(true);
-        }
-    }
-    
-    if(g_realtimeOptimizer != NULL) 
-    {
-        initSuccess = initSuccess && g_realtimeOptimizer.Initialize(g_adaptiveEngine, g_strategyManager);
-        if(initSuccess)
-        {
-            g_realtimeOptimizer.SetOptimizationFrequency(OPTIMIZATION_PARAMETERS, FREQ_MEDIUM);
-            g_realtimeOptimizer.SetOptimizationFrequency(OPTIMIZATION_STRATEGY, FREQ_LOW);
-            g_realtimeOptimizer.EnableOptimization(OPTIMIZATION_PARAMETERS, true);
-            g_realtimeOptimizer.EnableOptimization(OPTIMIZATION_STRATEGY, InpEnableDynamicStrategy);
-            g_realtimeOptimizer.StartRealTimeOptimization();
-        }
-    }
-    
-    //--- Initialize spread manipulation detector
-    if(g_spreadDetector != NULL) 
-    {
-        initSuccess = initSuccess && g_spreadDetector.Init(Symbol(), PERIOD_CURRENT);
-        if(initSuccess)
-        {
-            g_spreadDetector.SetParameters(InpSpreadMultiplierThreshold, InpVolumeAnomalyThreshold, 
-                                         InpRapidSpreadChangeThreshold, InpMinDetectionPeriod, 
-                                         InpMaxDetectionPeriod);
-            g_spreadDetector.SetNewsFilter(InpFilterNewsEvents, InpNewsFilterMinutes);
-            g_spreadDetector.SetAlerts(InpEnableSpreadAlerts, InpEnableSpreadNotifications, "alert.wav");
-            Print("✅ Spread manipulation detector initialized successfully");
-        }
-    }
-    
-    //--- Initialize broker and leverage detector
-    if(g_brokerDetector != NULL) 
-    {
-        initSuccess = initSuccess && g_brokerDetector.Init(Symbol());
-        if(initSuccess)
-        {
-            Print("✅ Broker and leverage detector initialized successfully");
-            if(InpShowBrokerInfo)
-            {
-                g_brokerDetector.PrintFullReport();
-            }
-        }
-    }
-    
-    if(!initSuccess)
-    {
-        Alert("❌ MetaphizixEA: Component initialization failed! Check expert logs for details.");
-        Print("❌ ERROR: Failed to initialize components");
-        CleanupObjects();
-        return(INIT_FAILED);
-    }
-    
-    Print("⚙️  All components initialized successfully");
-    
-    //--- Set references between components
-    g_signalManager.SetOrderBlockDetector(g_orderBlockDetector);
-    g_tradeExecutor.SetRiskManager(g_riskManager);
-    
-    //--- Set component references for enhanced signal processing
-    g_signalManager.SetComponentReferences(g_orderBlockDetector, g_forexAnalyzer, g_mlPredictor, 
-                                          g_volatilityAnalyzer, g_correlationAnalyzer,
-                                          g_adaptiveEngine, g_strategyManager, g_realtimeOptimizer);
-    
-    //--- Set up advanced module integrations
-    if(g_forexAnalyzer != NULL && g_signalManager != NULL)
-    {
-        // Integration will be handled through shared data structures
-    }
-    
-    if(g_volatilityAnalyzer != NULL && g_riskManager != NULL)
-    {
-        // Volatility data will enhance risk calculations
-    }
-    
-    if(g_correlationAnalyzer != NULL && g_pairManager != NULL)
-    {
-        // Correlation data will improve pair selection
-    }
-    
-    if(g_mlPredictor != NULL)
-    {
-        // ML predictions will enhance signal quality
-    }
-    
-    //--- Set timer
-    EventSetTimer(InpTimerInterval);
-    
-    if(InpEnableLogging)
-    {
-        Print("🎯 MetaphizixEA initialized successfully!");
-        Print("📦 Core components loaded: OrderBlock, PairManager, Signal, Display, Risk, Trade, News, Session, Exit");
-        string advancedModules = "🚀 Advanced modules: ";
-        if(g_forexAnalyzer != NULL) advancedModules += "ForexAnalyzer ";
-        if(g_volatilityAnalyzer != NULL) advancedModules += "VolatilityAnalyzer ";
-        if(g_correlationAnalyzer != NULL) advancedModules += "CorrelationAnalyzer ";
-        if(g_mlPredictor != NULL) advancedModules += "MLPredictor ";
-        Print(advancedModules);
-        Print("💹 Trading Mode: ", InpEnableAutoTrading ? "🔴 LIVE TRADING ACTIVE" : "🟢 ANALYSIS MODE");
-        Print("========================================================");
-        
-        if(!InpEnableAutoTrading)
-        {
-            Print("ℹ️  ANALYSIS MODE: EA will display signals without executing trades");
-            Print("ℹ️  To enable live trading, set 'InpEnableAutoTrading = true'");
-        }
-        else
-        {
-            Print("⚠️  LIVE TRADING ACTIVE: EA will execute trades automatically");
-            Print("⚠️  Risk per trade: ", InpAccountRiskPercent, "%");
-            Print("⚠️  Ensure you understand the risks before proceeding");
-        }
-        Print("========================================================");
-    }
-    
-    //--- Display startup message to user
-    if(InpShowWelcomeMessage)
-    {
-        string startupMessage = "✅ MetaphizixEA v3.00 Ready!\n\n";
-        startupMessage += "📊 Mode: " + (InpEnableAutoTrading ? "LIVE TRADING" : "ANALYSIS ONLY") + "\n";
-        startupMessage += "🎯 Pairs: " + IntegerToString(InpMaxConcurrentPairs) + " concurrent\n";
-        startupMessage += "📈 Risk: " + DoubleToString(InpAccountRiskPercent, 1) + "% per trade\n\n";
-        startupMessage += "Check the Experts tab for detailed information.";
-        
-        Alert(startupMessage);
-    }
     
     return(INIT_SUCCEEDED);
 }
@@ -844,12 +642,12 @@ bool UpdateMarketData()
     //--- Update advanced modules if enabled
     if(g_forexAnalyzer != NULL)
     {
-        g_forexAnalyzer.AnalyzePair(Symbol());
+        g_forexAnalyzer.AnalyzeSymbol(Symbol());
     }
     
     if(g_volatilityAnalyzer != NULL)
     {
-        g_volatilityAnalyzer.AnalyzePair(Symbol());
+        g_volatilityAnalyzer.AnalyzeAllSymbols();
     }
     
     //--- Monitor broker and leverage conditions
@@ -901,7 +699,7 @@ bool ProcessSignalAnalysis()
     }
     
     //--- Update signal manager
-    if(!g_signalManager.AnalyzePair(Symbol()))
+    if(!g_signalManager.ProcessSignal(Symbol()))
     {
         if(CConfig::IsLoggingEnabled())
             Print("WARNING: Signal update failed for ", Symbol());
@@ -1033,7 +831,7 @@ void ProcessTradeExecution()
             //--- Calculate dynamic profit target
             double dynamicTP = CalculateDynamicProfitTarget(signals[i].symbol, signals[i].entry_price, 
                                                           signals[i].stop_loss, 
-                                                          (signals[i].type == SIGNAL_BUY_ENTRY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+                                                          (signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
             
             //--- Create trade request using built-in MQL5 structure
             MqlTradeRequest request = {0};
@@ -1061,12 +859,12 @@ void ProcessTradeExecution()
             request.comment = "MetaphizixEA v3.00 [" + styleText + "]";
             
             //--- Set order type based on signal
-            if(signals[i].type == SIGNAL_BUY_ENTRY)
+            if(signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY)
             {
                 request.type = ORDER_TYPE_BUY;
                 request.price = SymbolInfoDouble(signals[i].symbol, SYMBOL_ASK);
             }
-            else if(signals[i].type == SIGNAL_SELL_ENTRY)
+            else if(signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY)
             {
                 request.type = ORDER_TYPE_SELL;
                 request.price = SymbolInfoDouble(signals[i].symbol, SYMBOL_BID);
@@ -1208,60 +1006,62 @@ void OnTimer()
             
         g_pairManager.AnalyzeAllPairs();
         
-        //--- Get best pairs to trade
-        string bestPairs[];
-        if(g_pairManager.GetBestPairs(bestPairs))
+        // Note: g_bestPairs is already sized to g_maxPairs in initialization
+        if(g_pairManager.GetBestPairs(g_bestPairs))
         {
             if(InpDisplayDetailedLogs)
-                Print("📊 Found ", ArraySize(bestPairs), " trading opportunities");
+                Print("📊 Found ", ArraySize(g_bestPairs), " trading opportunities");
             
             //--- Update correlation analysis if enabled
             if(g_correlationAnalyzer != NULL)
             {
                 if(InpDisplayDetailedLogs)
                     Print("🔗 Updating correlation analysis...");
-                g_correlationAnalyzer.AnalyzeMultiplePairs(bestPairs);
+                double weights[];
+                ArrayResize(weights, ArraySize(g_bestPairs));
+                ArrayInitialize(weights, 1.0 / ArraySize(g_bestPairs));
+                g_correlationAnalyzer.AnalyzePortfolioCorrelations(g_bestPairs, weights);
             }
             
             //--- Process each best pair
-            for(int i = 0; i < ArraySize(bestPairs); i++)
+            for(int i = 0; i < ArraySize(g_bestPairs); i++)
             {
                 if(g_orderBlockDetector != NULL)
                 {
                     if(InpDisplayDetailedLogs)
-                        Print("🎯 Analyzing order blocks for ", bestPairs[i]);
+                        Print("🎯 Analyzing order blocks for ", g_bestPairs[i]);
                         
                     //--- Detect order blocks for this pair
-                    g_orderBlockDetector.AnalyzePair(bestPairs[i]);
+                    g_orderBlockDetector.AnalyzePair(g_bestPairs[i]);
                     
                     //--- Enhanced analysis with advanced modules
                     if(g_forexAnalyzer != NULL)
                     {
-                        g_forexAnalyzer.AnalyzePair(bestPairs[i]);
+                        g_forexAnalyzer.AnalyzeSymbol(g_bestPairs[i]);
                     }
                     
                     if(g_volatilityAnalyzer != NULL)
                     {
-                        g_volatilityAnalyzer.AnalyzePair(bestPairs[i]);
+                        g_volatilityAnalyzer.AnalyzeAllSymbols();
                     }
                     
                     //--- Process signals if any
-                    if(g_signalManager != NULL && g_orderBlockDetector.HasNewOrderBlock(bestPairs[i]))
+                    if(g_signalManager != NULL && g_orderBlockDetector.HasNewOrderBlock(g_bestPairs[i]))
                     {
                         if(InpDisplayDetailedLogs)
-                            Print("💡 New order block detected for ", bestPairs[i], " - Generating signals...");
-                        g_signalManager.AnalyzePair(bestPairs[i]);
+                            Print("💡 New order block detected for ", g_bestPairs[i], " - Generating signals...");
+                        g_signalManager.ProcessSignal(g_bestPairs[i]);
                     }
                 }
             }
             
             //--- Update display for all analyzed pairs
             if(g_displayManager != NULL)
-                g_displayManager.UpdateAllDisplays(bestPairs);
+                g_displayManager.UpdateAllDisplays(g_bestPairs);
                 
             //--- Summary for user
             if(InpDisplayDetailedLogs)
-                Print("✅ Multi-pair analysis complete - ", ArraySize(bestPairs), " pairs processed");
+                Print("✅ Multi-pair analysis complete - ", ArraySize(g_bestPairs), " pairs processed");
         }
         else
         {
@@ -1278,7 +1078,7 @@ void OnTimer()
         {
             if(InpDisplayDetailedLogs)
                 Print("🧠 Training machine learning models...");
-            g_mlPredictor.TrainModel();
+            g_mlPredictor.TrainModel(Symbol(), 1000);
             lastMLUpdate = currentTime;
             Print("✅ ML model training completed");
         }
@@ -1707,6 +1507,10 @@ bool InitializeSystemConfiguration()
         Print("❌ ERROR: Failed to initialize configuration");
         return false;
     }
+    
+    //--- Initialize global arrays
+    ArrayResize(g_bestPairs, g_maxPairs);
+    ArrayInitialize(g_bestPairs, "");
     
     Print("🔧 Configuration initialized successfully");
     Print("💼 Trading pairs configured: ", InpTradingPairs);

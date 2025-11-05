@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "Config.mqh"  // Must come first for ENUM_SIGNAL_TYPE and other enums
 #include "RiskManagement.mqh"
 
 //+------------------------------------------------------------------+
@@ -141,6 +141,7 @@ public:
     SExecutionConfig GetConfiguration() const { return m_config; }
     
     //--- Advanced trade execution methods
+    bool ExecuteSignal(const SSignal &signal);
     SExecutionResult ExecuteBuyTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit, double confidence = 1.0);
     SExecutionResult ExecuteSellTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit, double confidence = 1.0);
     SExecutionResult ExecuteOrderRequest(const SOrderRequest &request);
@@ -184,7 +185,7 @@ public:
     bool IsHighLiquidityPeriod(const string symbol);
     
     //--- Multi-order management
-    bool ExecuteBatchOrders(const SOrderRequest requests[]);
+    bool ExecuteBatchOrders(SOrderRequest &requests[]);
     bool ManagePendingOrders();
     void CancelAllPendingOrders(const string symbol = "");
     int GetActiveOrderCount(const string symbol = "");
@@ -202,9 +203,9 @@ public:
     double CalculateRiskReward(ulong ticket);
     bool IsTradeOpen(ulong ticket);
     
-    //--- Backward compatibility methods
-    bool ExecuteBuyTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit);
-    bool ExecuteSellTrade(const string symbol, double entryPrice, double stopLoss, double takeProfit);
+    //--- Backward compatibility methods (renamed to avoid ambiguity)
+    bool ExecuteBuyTradeCompat(const string symbol, double entryPrice, double stopLoss, double takeProfit);
+    bool ExecuteSellTradeCompat(const string symbol, double entryPrice, double stopLoss, double takeProfit);
     bool ModifyTrade(ulong ticket, double stopLoss, double takeProfit);
     bool CloseTrade(ulong ticket, double volume = 0);
     
@@ -270,7 +271,6 @@ private:
     bool ShouldRetryExecution(int errorCode, int currentRetry);
     void HandlePartialFill(const SExecutionResult &result);
 };
-};
 
 //+------------------------------------------------------------------+
 //| Constructor                                                      |
@@ -312,7 +312,7 @@ void CTradeExecution::SetRiskManager(CRiskManagement* riskManager)
 //+------------------------------------------------------------------+
 //| Execute buy trade                                                |
 //+------------------------------------------------------------------+
-bool CTradeExecution::ExecuteBuyTrade(string symbol, double entryPrice, double stopLoss, double takeProfit)
+bool CTradeExecution::ExecuteBuyTradeCompat(string symbol, double entryPrice, double stopLoss, double takeProfit)
 {
     if(m_riskManager == NULL)
     {
@@ -349,13 +349,13 @@ bool CTradeExecution::ExecuteBuyTrade(string symbol, double entryPrice, double s
         return false;
     }
     
-    return SendBuyOrder(symbol, positionSize, entryPrice, stopLoss, takeProfit);
+    return SendBuyOrder(symbol, positionSize, entryPrice, stopLoss, takeProfit, "MetaphizixEA Buy");
 }
 
 //+------------------------------------------------------------------+
 //| Execute sell trade                                               |
 //+------------------------------------------------------------------+
-bool CTradeExecution::ExecuteSellTrade(string symbol, double entryPrice, double stopLoss, double takeProfit)
+bool CTradeExecution::ExecuteSellTradeCompat(string symbol, double entryPrice, double stopLoss, double takeProfit)
 {
     if(m_riskManager == NULL)
     {
@@ -392,7 +392,7 @@ bool CTradeExecution::ExecuteSellTrade(string symbol, double entryPrice, double 
         return false;
     }
     
-    return SendSellOrder(symbol, positionSize, entryPrice, stopLoss, takeProfit);
+    return SendSellOrder(symbol, positionSize, entryPrice, stopLoss, takeProfit, "MetaphizixEA Sell");
 }
 
 //+------------------------------------------------------------------+
@@ -402,14 +402,14 @@ bool CTradeExecution::ExecuteSignal(const SSignal &signal)
 {
     switch(signal.type)
     {
-        case SIGNAL_BUY_ENTRY:
+        case (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY:
             return ExecuteBuyTrade(signal.symbol, signal.entry_price, signal.stop_loss, signal.take_profit);
             
-        case SIGNAL_SELL_ENTRY:
+        case (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY:
             return ExecuteSellTrade(signal.symbol, signal.entry_price, signal.stop_loss, signal.take_profit);
             
-        case SIGNAL_BUY_EXIT:
-        case SIGNAL_SELL_EXIT:
+        case (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT:
+        case (ENUM_SIGNAL_TYPE)SIGNAL_SELL_EXIT:
             // Find and close relevant positions
             for(int i = 0; i < PositionsTotal(); i++)
             {
@@ -435,7 +435,7 @@ bool CTradeExecution::ExecuteSignal(const SSignal &signal)
 //+------------------------------------------------------------------+
 //| Send buy order                                                   |
 //+------------------------------------------------------------------+
-bool CTradeExecution::SendBuyOrder(string symbol, double volume, double price, double sl, double tp)
+bool CTradeExecution::SendBuyOrder(const string symbol, double volume, double price, double sl, double tp, const string comment)
 {
     MqlTradeRequest request = {};
     MqlTradeResult result = {};
@@ -448,6 +448,7 @@ bool CTradeExecution::SendBuyOrder(string symbol, double volume, double price, d
     request.sl = sl;
     request.tp = tp;
     request.magic = m_magicNumber;
+    request.comment = comment;
     request.comment = GetTradeComment(symbol, "BUY");
     request.deviation = 3;
     
@@ -470,7 +471,7 @@ bool CTradeExecution::SendBuyOrder(string symbol, double volume, double price, d
 //+------------------------------------------------------------------+
 //| Send sell order                                                  |
 //+------------------------------------------------------------------+
-bool CTradeExecution::SendSellOrder(string symbol, double volume, double price, double sl, double tp)
+bool CTradeExecution::SendSellOrder(const string symbol, double volume, double price, double sl, double tp, const string comment)
 {
     MqlTradeRequest request = {};
     MqlTradeResult result = {};
@@ -483,7 +484,7 @@ bool CTradeExecution::SendSellOrder(string symbol, double volume, double price, 
     request.sl = sl;
     request.tp = tp;
     request.magic = m_magicNumber;
-    request.comment = GetTradeComment(symbol, "SELL");
+    request.comment = comment;
     request.deviation = 3;
     
     bool success = OrderSend(request, result);
@@ -608,9 +609,9 @@ bool CTradeExecution::CloseTrade(ulong ticket, double volume = 0)
 }
 
 //+------------------------------------------------------------------+
-//| Close partial trade                                              |
+//| Close partial position                                           |
 //+------------------------------------------------------------------+
-bool CTradeExecution::ClosePartialTrade(ulong ticket, double percentage)
+bool CTradeExecution::ClosePartialPosition(ulong ticket, double percentage)
 {
     if(!PositionSelectByTicket(ticket))
         return false;

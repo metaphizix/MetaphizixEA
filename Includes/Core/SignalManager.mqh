@@ -6,9 +6,12 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
-#include "OrderBlockDetector.mqh"
+#ifndef SIGNALMANAGER_MQH
+#define SIGNALMANAGER_MQH
+
+#include "Config.mqh"  // Must come first for ENUM_SIGNAL_TYPE and other enums
 #include "../Advanced/ForexAnalyzer.mqh"
+#include "OrderBlockDetector.mqh"
 #include "../Advanced/MLPredictor.mqh"
 #include "../Advanced/VolatilityAnalyzer.mqh"
 #include "../Advanced/CorrelationAnalyzer.mqh"
@@ -19,17 +22,7 @@
 //+------------------------------------------------------------------+
 //| Enhanced Signal types and enumerations                          |
 //+------------------------------------------------------------------+
-enum ENUM_SIGNAL_TYPE
-{
-    SIGNAL_NONE = 0,
-    SIGNAL_BUY = 1,
-    SIGNAL_SELL = 2,
-    SIGNAL_BUY_EXIT = 3,
-    SIGNAL_SELL_EXIT = 4,
-    SIGNAL_HOLD = 5,
-    SIGNAL_REDUCE = 6,
-    SIGNAL_INCREASE = 7
-};
+// ENUM_SIGNAL_TYPE is defined in Config.mqh to avoid conflicts
 
 enum ENUM_SIGNAL_SOURCE
 {
@@ -182,8 +175,10 @@ public:
                                CMLPredictor* ml, CVolatilityAnalyzer* vol, CCorrelationAnalyzer* corr,
                                CAdaptiveDecisionEngine* adaptive, CDynamicStrategyManager* strategy,
                                CRealtimeOptimizer* optimizer);
+    void SetOrderBlockDetector(COrderBlockDetector* detector);
     
     //--- Main signal processing
+    bool ProcessSignal(string symbol);
     bool ProcessSignals(const string symbol);
     bool ProcessAllSymbols();
     bool GenerateEnsembleSignal(const string symbol);
@@ -218,8 +213,8 @@ public:
     bool PassesMultiTimeframeCheck(const SSignal &signal);
     
     //--- Signal combination and weighting
-    SSignal CombineSignals(const SSignal signals[]);
-    double CalculateEnsembleConfidence(const SSignal signals[]);
+    SSignal CombineSignals(SSignal &signals[]);
+    double CalculateEnsembleConfidence(SSignal &signals[]);
     void OptimizeSignalWeights();
     double CalculateSignalWeight(ENUM_SIGNAL_SOURCE source, const string symbol);
     
@@ -261,7 +256,6 @@ public:
     void PrioritizeSignals(SSignal &signals[]);
     
     //--- Advanced signal features
-    bool GenerateAdaptiveSignals(const string symbol);
     bool GenerateRegimeAwareSignals(const string symbol);
     bool GenerateRiskAdjustedSignals(const string symbol);
     
@@ -285,15 +279,16 @@ private:
     SSignal CreateSignalFromML(const string symbol, const SMLPrediction &mlPrediction);
     
     //--- Signal calculation helpers
-    double CalculateStopLoss(const string symbol, const SSignal &signal);
-    double CalculateTakeProfit(const string symbol, const SSignal &signal);
-    double CalculateSignalConfidence(const string symbol, const SSignal &signal);
+    double CalculateStopLoss(string symbol, const SOrderBlock &orderBlock, ENUM_SIGNAL_TYPE signalType);
+    double CalculateTakeProfit(string symbol, const SOrderBlock &orderBlock, ENUM_SIGNAL_TYPE signalType);
+    double CalculateSignalConfidence(string symbol, const SOrderBlock &orderBlock);
     double CalculateRiskRewardRatio(const SSignal &signal);
     
     //--- Validation helpers
-    bool IsSignalRelevant(const string symbol, const SSignal &signal);
-    bool CheckEntryConditions(const string symbol, const SSignal &signal);
-    bool CheckExitConditions(const string symbol, const SSignal &signal);
+    bool IsSignalRelevant(string symbol, const SOrderBlock &orderBlock);
+    bool CheckEntryConditions(string symbol, const SOrderBlock &orderBlock);
+    bool CheckExitConditions(string symbol, const SOrderBlock &orderBlock);
+    bool IsNearOrderBlock(string symbol, const SOrderBlock &orderBlock, double tolerance = 0.5);
     bool IsNearSignificantLevel(const string symbol, double price);
     
     //--- Market analysis helpers
@@ -318,7 +313,6 @@ private:
     void InitializeDefaultConfig();
     void ValidateConfiguration();
     void ApplyConfigurationChanges();
-};
 };
 
 //+------------------------------------------------------------------+
@@ -420,15 +414,15 @@ bool CSignalManager::GenerateEntrySignal(string symbol, const SOrderBlock &order
     signal.is_processed = false;
     
     //--- Determine signal type based on order block direction
-    if(orderBlock.is_bullish)
+    if(orderBlock.type == OB_TYPE_BULLISH)
     {
-        signal.type = SIGNAL_BUY_ENTRY;
+        signal.type = (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY;
         signal.entry_price = orderBlock.high;
         signal.reason = "Bullish order block entry at " + DoubleToString(orderBlock.high, _Digits);
     }
     else
     {
-        signal.type = SIGNAL_SELL_ENTRY;
+        signal.type = (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY;
         signal.entry_price = orderBlock.low;
         signal.reason = "Bearish order block entry at " + DoubleToString(orderBlock.low, _Digits);
     }
@@ -462,17 +456,17 @@ bool CSignalManager::GenerateExitSignal(string symbol, const SOrderBlock &orderB
     signal.is_processed = false;
     
     //--- Determine exit based on current price position relative to order block
-    double currentPrice = GetCurrentPrice(symbol, SIGNAL_BUY_EXIT);
+    double currentPrice = GetCurrentPrice(symbol, (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT);
     
     if(orderBlock.is_bullish && currentPrice < orderBlock.low)
     {
-        signal.type = SIGNAL_BUY_EXIT;
+        signal.type = (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT;
         signal.entry_price = currentPrice;
         signal.reason = "Exit long position - price below bullish order block";
     }
     else if(!orderBlock.is_bullish && currentPrice > orderBlock.high)
     {
-        signal.type = SIGNAL_SELL_EXIT;
+        signal.type = (ENUM_SIGNAL_TYPE)SIGNAL_SELL_EXIT;
         signal.entry_price = currentPrice;
         signal.reason = "Exit short position - price above bearish order block";
     }
@@ -506,11 +500,11 @@ double CSignalManager::CalculateStopLoss(string symbol, const SOrderBlock &order
     double atr = GetATR(symbol, orderBlock.timeframe);
     double stopDistance = atr * 1.5; // 1.5 x ATR
     
-    if(signalType == SIGNAL_BUY_ENTRY)
+    if(signalType == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY)
     {
         return orderBlock.low - stopDistance;
     }
-    else if(signalType == SIGNAL_SELL_ENTRY)
+    else if(signalType == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY)
     {
         return orderBlock.high + stopDistance;
     }
@@ -526,11 +520,11 @@ double CSignalManager::CalculateTakeProfit(string symbol, const SOrderBlock &ord
     double atr = GetATR(symbol, orderBlock.timeframe);
     double targetDistance = atr * 3.0; // 3 x ATR (2:1 risk-reward)
     
-    if(signalType == SIGNAL_BUY_ENTRY)
+    if(signalType == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY)
     {
         return orderBlock.high + targetDistance;
     }
-    else if(signalType == SIGNAL_SELL_ENTRY)
+    else if(signalType == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY)
     {
         return orderBlock.low - targetDistance;
     }
@@ -585,18 +579,18 @@ bool CSignalManager::ValidateSignal(const SSignal &signal)
         return false;
     
     //--- Check stop loss validity (for entry signals)
-    if((signal.type == SIGNAL_BUY_ENTRY || signal.type == SIGNAL_SELL_ENTRY) && signal.stop_loss <= 0)
+    if((signal.type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY || signal.type == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY) && signal.stop_loss <= 0)
         return false;
     
     //--- Check risk-reward ratio
-    if(signal.type == SIGNAL_BUY_ENTRY)
+    if(signal.type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY)
     {
         double risk = signal.entry_price - signal.stop_loss;
         double reward = signal.take_profit - signal.entry_price;
         if(reward / risk < 1.5) // Minimum 1.5:1 risk-reward
             return false;
     }
-    else if(signal.type == SIGNAL_SELL_ENTRY)
+    else if(signal.type == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY)
     {
         double risk = signal.stop_loss - signal.entry_price;
         double reward = signal.entry_price - signal.take_profit;
@@ -633,7 +627,7 @@ bool CSignalManager::IsSignalRelevant(string symbol, const SOrderBlock &orderBlo
 //+------------------------------------------------------------------+
 bool CSignalManager::CheckEntryConditions(string symbol, const SOrderBlock &orderBlock)
 {
-    double currentPrice = GetCurrentPrice(symbol, SIGNAL_BUY_ENTRY);
+    double currentPrice = GetCurrentPrice(symbol, (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY);
     
     if(orderBlock.is_bullish)
     {
@@ -652,7 +646,7 @@ bool CSignalManager::CheckEntryConditions(string symbol, const SOrderBlock &orde
 //+------------------------------------------------------------------+
 bool CSignalManager::CheckExitConditions(string symbol, const SOrderBlock &orderBlock)
 {
-    double currentPrice = GetCurrentPrice(symbol, SIGNAL_BUY_EXIT);
+    double currentPrice = GetCurrentPrice(symbol, (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT);
     
     //--- Exit conditions based on order block violation
     if(orderBlock.is_bullish)
@@ -670,7 +664,7 @@ bool CSignalManager::CheckExitConditions(string symbol, const SOrderBlock &order
 //+------------------------------------------------------------------+
 double CSignalManager::GetCurrentPrice(string symbol, ENUM_SIGNAL_TYPE signalType)
 {
-    if(signalType == SIGNAL_BUY_ENTRY || signalType == SIGNAL_BUY_EXIT)
+    if(signalType == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY || signalType == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT)
         return SymbolInfoDouble(symbol, SYMBOL_ASK);
     else
         return SymbolInfoDouble(symbol, SYMBOL_BID);
@@ -701,7 +695,7 @@ double CSignalManager::GetATR(string symbol, ENUM_TIMEFRAMES timeframe, int peri
 //+------------------------------------------------------------------+
 bool CSignalManager::IsNearOrderBlock(string symbol, const SOrderBlock &orderBlock, double tolerance = 0.5)
 {
-    double currentPrice = GetCurrentPrice(symbol, SIGNAL_BUY_ENTRY);
+    double currentPrice = GetCurrentPrice(symbol, (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY);
     double atr = GetATR(symbol, orderBlock.timeframe);
     double distance = atr * tolerance;
     
@@ -844,3 +838,5 @@ int CSignalManager::GetSignalCount(string symbol = "")
     
     return count;
 }
+
+#endif // SIGNALMANAGER_MQH

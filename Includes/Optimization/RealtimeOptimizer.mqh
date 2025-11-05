@@ -168,11 +168,11 @@ public:
     void OptimizeTimeframeParameters(string symbol);
     
     //--- Advanced Optimization Algorithms
-    double GeneticAlgorithmOptimization(double parameters[], int paramCount, string symbol);
-    double ParticleSwarmOptimization(double parameters[], int paramCount, string symbol);
-    double BayesianOptimization(double parameters[], int paramCount, string symbol);
-    double GradientDescentOptimization(double parameters[], int paramCount, string symbol);
-    double SimulatedAnnealingOptimization(double parameters[], int paramCount, string symbol);
+    double GeneticAlgorithmOptimization(double &parameters[], int paramCount, string symbol);
+    double ParticleSwarmOptimization(double &parameters[], int paramCount, string symbol);
+    double BayesianOptimization(double &parameters[], int paramCount, string symbol);
+    double GradientDescentOptimization(double &parameters[], int paramCount, string symbol);
+    double SimulatedAnnealingOptimization(double &parameters[], int paramCount, string symbol);
     
     //--- Machine Learning Optimization
     void OptimizeMLModelParameters();
@@ -222,7 +222,7 @@ public:
     void OptimizeForNewsEvents(string symbol);
     
     //--- Multi-Objective Optimization
-    double MultiObjectiveOptimization(string symbol, double weights[]);
+    double MultiObjectiveOptimization(string symbol, double &weights[]);
     void OptimizeReturnVsRisk(string symbol);
     void OptimizeStabilityVsGrowth(string symbol);
     void OptimizeAccuracyVsFrequency(string symbol);
@@ -272,7 +272,7 @@ private:
     void InitializeLearningSystem();
     
     //--- Performance calculation helpers
-    double CalculateObjectiveFunction(const double parameters[], int count, string symbol);
+    double CalculateObjectiveFunction(double &parameters[], int count, string symbol);
     double EvaluatePerformanceMetric(ENUM_OPTIMIZATION_TYPE type);
     void UpdatePerformanceHistory();
     double CalculatePerformanceImprovement(double oldValue, double newValue);
@@ -282,7 +282,7 @@ private:
     void InitializeParticleSwarm();
     void InitializeBayesianOptimization();
     double GenerateRandomParameter(double min, double max);
-    void MutateParameters(double parameters[], int count, double mutationRate);
+    void MutateParameters(double &parameters[], int count, double mutationRate);
     
     //--- Learning system helpers
     void UpdateParameterSensitivity(int paramIndex, double impact);
@@ -291,7 +291,7 @@ private:
     void ForgetOldLearning();
     
     //--- Validation helpers
-    bool ValidateOptimizationParameters(const double parameters[], int count);
+    bool ValidateOptimizationParameters(double &parameters[], int count);
     bool ValidateOptimizationResult(const SOptimizationResult &result);
     void HandleOptimizationFailure(ENUM_OPTIMIZATION_TYPE type);
     
@@ -312,10 +312,10 @@ class COptimizationUtils
 public:
     static double NormalizeParameter(double value, double min, double max);
     static double DenormalizeParameter(double normalizedValue, double min, double max);
-    static void Crossover(double parent1[], double parent2[], double child[], int count);
-    static void Mutate(double parameters[], int count, double mutationRate);
-    static double CalculateFitness(double parameters[], int count, string symbol);
-    static void SortByFitness(double population[][50], double fitness[], int populationSize, int paramCount);
+    static void Crossover(double &parent1[], double &parent2[], double &child[], int count);
+    static void Mutate(double &parameters[], int count, double mutationRate);
+    static double CalculateFitness(double &parameters[], int count, string symbol);
+    static void SortByFitness(double &population[], double &fitness[], int populationSize, int paramCount);
 };
 
 //--- Global realtime optimizer instance

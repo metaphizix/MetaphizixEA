@@ -6,7 +6,7 @@
 #property copyright "Copyright 2025, Metaphizix Ltd."
 #property link      "https://github.com/metaphizix/MetaphizixEA"
 
-#include "Config.mqh"
+#include "Config.mqh"  // Must come first for ENUM_SIGNAL_TYPE and other enums
 #include "SignalManager.mqh"
 
 //+------------------------------------------------------------------+
@@ -57,6 +57,7 @@ public:
     bool CreateEntryPoint(string symbol, datetime time, double price, bool isBullish, string tooltip = "");
     bool CreateExitPoint(string symbol, datetime time, double price, string tooltip = "");
     bool CreateOrderBlockRectangle(string symbol, datetime time1, double price1, datetime time2, double price2, bool isBullish);
+    void CreateInformationPanels();
     
     //--- Utility functions
     void SetDisplaySettings(bool showEntry, bool showExit);
@@ -80,6 +81,12 @@ private:
     //--- Object management
     void CleanupObject(string name);
     void CleanupOldObjects(string symbol, datetime cutoffTime);
+    
+    //--- Panel creation methods
+    void CreateEAStatusPanel(int yPosition);
+    void CreateRiskManagementPanel(int yPosition);
+    void CreatePerformancePanel(int yPosition);
+    void CreateMarketConditionsPanel(int yPosition);
 };
 
 //+------------------------------------------------------------------+
@@ -142,7 +149,6 @@ void CDisplayManager::UpdateDisplay(string symbol)
     CreateInformationPanels();
     
     //--- Get signals for this symbol from global signal manager
-    extern CSignalManager* g_signalManager;
     if(g_signalManager == NULL)
         return;
     
@@ -153,11 +159,11 @@ void CDisplayManager::UpdateDisplay(string symbol)
     //--- Display each signal
     for(int i = 0; i < ArraySize(signals); i++)
     {
-        if(signals[i].type == SIGNAL_BUY_ENTRY || signals[i].type == SIGNAL_SELL_ENTRY)
+        if(signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY || signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_ENTRY)
         {
             if(m_showEntryPoints)
             {
-                bool isBullish = (signals[i].type == SIGNAL_BUY_ENTRY);
+                bool isBullish = (signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_ENTRY);
                 string tooltip = StringFormat("%s\\nEntry: %.5f\\nSL: %.5f\\nTP: %.5f\\nConfidence: %.1f%%\\n%s",
                                             EnumToString(signals[i].type),
                                             signals[i].entry_price,
@@ -169,7 +175,7 @@ void CDisplayManager::UpdateDisplay(string symbol)
                 CreateEntryPoint(symbol, signals[i].time, signals[i].entry_price, isBullish, tooltip);
             }
         }
-        else if(signals[i].type == SIGNAL_BUY_EXIT || signals[i].type == SIGNAL_SELL_EXIT)
+        else if(signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_BUY_EXIT || signals[i].type == (ENUM_SIGNAL_TYPE)SIGNAL_SELL_EXIT)
         {
             if(m_showExitPoints)
             {
@@ -185,7 +191,6 @@ void CDisplayManager::UpdateDisplay(string symbol)
     }
     
     //--- Display order blocks if available
-    extern COrderBlockDetector* g_orderBlockDetector;
     if(g_orderBlockDetector != NULL)
     {
         SOrderBlock orderBlocks[];
@@ -590,13 +595,6 @@ void CDisplayManager::UpdateTooltip(string name, string tooltip)
 //+------------------------------------------------------------------+
 void CDisplayManager::CreateInformationPanels()
 {
-    extern bool InpShowInfoPanel;
-    extern bool InpShowRiskPanel;
-    extern bool InpShowPerformancePanel;
-    extern bool InpShowMarketConditions;
-    extern color InpPanelBackgroundColor;
-    extern color InpPanelTextColor;
-    
     if(!InpShowInfoPanel && !InpShowRiskPanel && !InpShowPerformancePanel && !InpShowMarketConditions)
         return;
     
@@ -636,12 +634,6 @@ void CDisplayManager::CreateInformationPanels()
 //+------------------------------------------------------------------+
 void CDisplayManager::CreateEAStatusPanel(int yPosition)
 {
-    extern bool InpEnableAutoTrading;
-    extern int InpMaxConcurrentPairs;
-    extern double InpAccountRiskPercent;
-    extern color InpPanelBackgroundColor;
-    extern color InpPanelTextColor;
-    
     string panelName = m_objectPrefix + "StatusPanel";
     
     //--- Create background rectangle
@@ -720,9 +712,6 @@ void CDisplayManager::CreateEAStatusPanel(int yPosition)
 //+------------------------------------------------------------------+
 void CDisplayManager::CreateRiskManagementPanel(int yPosition)
 {
-    extern color InpPanelBackgroundColor;
-    extern color InpPanelTextColor;
-    
     string panelName = m_objectPrefix + "RiskPanel";
     
     //--- Create background rectangle
@@ -754,7 +743,7 @@ void CDisplayManager::CreateRiskManagementPanel(int yPosition)
     int openPositions = PositionsTotal();
     double totalProfit = 0;
     double usedMargin = AccountInfoDouble(ACCOUNT_MARGIN);
-    double freeMargin = AccountInfoDouble(ACCOUNT_FREEMARGIN);
+    double freeMargin =         AccountInfoDouble(ACCOUNT_MARGIN_FREE);
     
     for(int i = 0; i < openPositions; i++)
     {
@@ -797,7 +786,6 @@ void CDisplayManager::CreateRiskManagementPanel(int yPosition)
     }
     
     //--- Risk status
-    extern CRiskManagement* g_riskManager;
     string riskStatus = "Risk Status: ";
     if(g_riskManager != NULL && g_riskManager.CanOpenNewTrade(_Symbol))
         riskStatus += "✅ OK";
